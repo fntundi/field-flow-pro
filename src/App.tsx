@@ -6,9 +6,16 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import AppLayout from "@/components/AppLayout";
 import Dashboard from "@/pages/Dashboard";
 import Jobs from "@/pages/Jobs";
+import Estimates from "@/pages/Estimates";
 import Dispatch from "@/pages/Dispatch";
 import Leads from "@/pages/Leads";
+import Customers from "@/pages/Customers";
 import Technicians from "@/pages/Technicians";
+import Schedule from "@/pages/Schedule";
+import ServiceAgreements from "@/pages/ServiceAgreements";
+import Invoices from "@/pages/Invoices";
+import Inventory from "@/pages/Inventory";
+import Analytics from "@/pages/Analytics";
 import PlaceholderPage from "@/pages/PlaceholderPage";
 import NotFound from "./pages/NotFound";
 
@@ -24,14 +31,17 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/jobs" element={<Jobs />} />
+            <Route path="/estimates" element={<Estimates />} />
             <Route path="/dispatch" element={<Dispatch />} />
             <Route path="/leads" element={<Leads />} />
+            <Route path="/customers" element={<Customers />} />
             <Route path="/technicians" element={<Technicians />} />
-            <Route path="/schedule" element={<PlaceholderPage title="Schedule" subtitle="Shift scheduling and calendar integration" />} />
+            <Route path="/schedule" element={<Schedule />} />
             <Route path="/checklists" element={<PlaceholderPage title="Checklists" subtitle="Installation evidence and quality verification" />} />
-            <Route path="/invoices" element={<PlaceholderPage title="Invoices" subtitle="Billing, payments, and financial tracking" />} />
-            <Route path="/inventory" element={<PlaceholderPage title="Inventory" subtitle="Asset tracking, vendors, and warranty data" />} />
-            <Route path="/analytics" element={<PlaceholderPage title="Analytics" subtitle="Business performance and reporting dashboards" />} />
+            <Route path="/agreements" element={<ServiceAgreements />} />
+            <Route path="/invoices" element={<Invoices />} />
+            <Route path="/inventory" element={<Inventory />} />
+            <Route path="/analytics" element={<Analytics />} />
             <Route path="/settings" element={<PlaceholderPage title="Settings" subtitle="Roles, permissions, and system configuration" />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
