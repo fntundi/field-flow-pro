@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Plus, Search, Filter } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 const allJobs = [
   { id: "JOB-1042", customer: "Sarah Mitchell", address: "1423 Oak Ave, Dallas, TX", type: "Residential Install", tech: "Mike Johnson", status: "in_progress" as const, scheduled: "Feb 27, 2:30 PM", priority: "Normal" },
@@ -17,6 +18,7 @@ const allJobs = [
 ];
 
 const Jobs = () => {
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const filtered = allJobs.filter(
     (j) =>
@@ -74,7 +76,11 @@ const Jobs = () => {
           </thead>
           <tbody>
             {filtered.map((job) => (
-              <tr key={job.id} className="cursor-pointer">
+              <tr
+                key={job.id}
+                className="cursor-pointer"
+                onClick={() => navigate(`/jobs/${job.id}`)}
+              >
                 <td className="font-mono text-xs font-medium">{job.id}</td>
                 <td className="font-medium">{job.customer}</td>
                 <td className="text-muted-foreground text-xs">{job.address}</td>
