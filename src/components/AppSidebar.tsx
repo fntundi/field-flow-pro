@@ -13,17 +13,23 @@ import {
   Settings,
   ChevronLeft,
   Flame,
+  UserCircle,
+  Calculator,
+  Shield,
 } from "lucide-react";
 import { useState } from "react";
 
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/jobs", icon: Briefcase, label: "Jobs" },
+  { to: "/estimates", icon: Calculator, label: "Estimates" },
   { to: "/dispatch", icon: MapPin, label: "Dispatch" },
   { to: "/leads", icon: Phone, label: "Leads & PCBs" },
+  { to: "/customers", icon: UserCircle, label: "Customers" },
   { to: "/technicians", icon: Users, label: "Technicians" },
   { to: "/schedule", icon: CalendarDays, label: "Schedule" },
   { to: "/checklists", icon: ClipboardCheck, label: "Checklists" },
+  { to: "/agreements", icon: Shield, label: "Agreements" },
   { to: "/invoices", icon: FileText, label: "Invoices" },
   { to: "/inventory", icon: Package, label: "Inventory" },
   { to: "/analytics", icon: BarChart3, label: "Analytics" },
