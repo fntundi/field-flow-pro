@@ -50,14 +50,14 @@ import {
 import { leadsApi, pcbsApi, Lead, PCB, LeadMetrics, PCBMetrics } from "@/lib/api";
 import { toast } from "sonner";
 
-const leadStatusConfig: Record<string, { label: string; color: string; icon: React.ElementType }> = {
-  new: { label: "New", color: "bg-blue-500/20 text-blue-400 border-blue-500/30", icon: AlertCircle },
-  contacted: { label: "Contacted", color: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30", icon: Phone },
-  qualified: { label: "Qualified", color: "bg-purple-500/20 text-purple-400 border-purple-500/30", icon: CheckCircle2 },
-  quoted: { label: "Quoted", color: "bg-cyan-500/20 text-cyan-400 border-cyan-500/30", icon: FileText },
-  won: { label: "Won", color: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30", icon: CheckCircle2 },
-  lost: { label: "Lost", color: "bg-red-500/20 text-red-400 border-red-500/30", icon: XCircle },
-};
+const leadStatusConfig = {
+  new: { label: "New", color: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
+  contacted: { label: "Contacted", color: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" },
+  qualified: { label: "Qualified", color: "bg-purple-500/20 text-purple-400 border-purple-500/30" },
+  quoted: { label: "Quoted", color: "bg-cyan-500/20 text-cyan-400 border-cyan-500/30" },
+  won: { label: "Won", color: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" },
+  lost: { label: "Lost", color: "bg-red-500/20 text-red-400 border-red-500/30" },
+} as Record<string, { label: string; color: string }>;
 
 const pcbStatusConfig: Record<string, { label: string; color: string }> = {
   created: { label: "Created", color: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
