@@ -230,6 +230,14 @@ class TestJobTimeTracking:
         tech_id = test_data["technician_id"]
         job_id = test_data["job_id"]
         
+        # Clean up any existing state
+        active_job = api_client.get(f"{BASE_URL}/api/time-tracking/job/active/{tech_id}")
+        if active_job.status_code == 200 and active_job.json().get("active"):
+            existing_entry = active_job.json()["entry"]
+            if existing_entry["status"] == "traveling":
+                api_client.post(f"{BASE_URL}/api/time-tracking/job/arrive/{existing_entry['id']}")
+            api_client.post(f"{BASE_URL}/api/time-tracking/job/complete/{existing_entry['id']}")
+        
         # Ensure no active shift
         api_client.post(f"{BASE_URL}/api/time-tracking/shift/end?technician_id={tech_id}")
         
@@ -249,6 +257,11 @@ class TestJobTimeTracking:
         assert data["message"] == "Dispatched to job"
         assert "entry_id" in data
         assert "job_number" in data
+        
+        # Clean up - complete the job entry
+        entry_id = data["entry_id"]
+        api_client.post(f"{BASE_URL}/api/time-tracking/job/arrive/{entry_id}")
+        api_client.post(f"{BASE_URL}/api/time-tracking/job/complete/{entry_id}")
     
     def test_dispatch_to_job_with_location(self, api_client, test_data):
         """Test dispatching to job with location - should calculate travel estimate"""
