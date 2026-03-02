@@ -2326,7 +2326,7 @@ export const reportsApi = {
     }),
 };
 
-// ==================== PAYMENTS API ====================
+// ==================== STRIPE PAYMENTS API ====================
 
 export interface CheckoutSession {
   checkout_url: string;
@@ -2341,7 +2341,7 @@ export interface CheckoutStatus {
   metadata: Record<string, string>;
 }
 
-export const paymentsApi = {
+export const stripePaymentsApi = {
   createCheckoutSession: (invoiceId: string) =>
     fetchApi<CheckoutSession>('/payments/checkout/create', {
       method: 'POST',
