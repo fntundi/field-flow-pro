@@ -1571,6 +1571,8 @@ async def get_truck_inventory(truck_id: str):
     if not inv:
         raise HTTPException(status_code=404, detail="Truck inventory not found")
     
+    # Exclude MongoDB _id field
+    inv.pop("_id", None)
     return inv
 
 @api_router.put("/truck-inventory/{truck_id}/items")
@@ -2010,6 +2012,9 @@ async def get_inventory_audit_log(
     query["created_at"] = {"$gte": since}
     
     logs = await db.inventory_audit_log.find(query).sort("created_at", -1).to_list(500)
+    # Exclude MongoDB _id field from each log
+    for log in logs:
+        log.pop("_id", None)
     return logs
 
 # ==================== J-LOAD CALCULATOR API ====================
