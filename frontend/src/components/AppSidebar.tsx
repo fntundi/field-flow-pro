@@ -44,6 +44,7 @@ const navItems = [
   { to: "/sites", icon: Building2, label: "Sites" },
   { to: "/technicians", icon: Users, label: "Technicians" },
   { to: "/schedule", icon: CalendarDays, label: "Schedule" },
+  { to: "/scheduling-board", icon: GanttChart, label: "Scheduling Board" },
   { to: "/maintenance", icon: Wrench, label: "Maintenance" },
   { to: "/agreements", icon: Shield, label: "Agreements" },
   { to: "/checklists", icon: ClipboardCheck, label: "Checklists" },
