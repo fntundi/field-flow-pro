@@ -41,12 +41,27 @@ Build a modern HVAC field service management system per RFC-002 with comprehensi
 - [x] Day and Week view modes
 - [x] Technician columns with specialties
 
-### Install Project Billing (RFC-002 Section 4.5.3) - NEW
-- [x] **Milestone Templates** - 4 predefined configurable templates:
-  - Standard Install (30/40/30)
-  - Equipment Only (50/50)
-  - Large Project (20/30/30/20)
-  - Full Payment on Completion
+### Job Chat System (RFC-002 Section 4.3) - NEW
+- [x] **WebSocket-based real-time chat** - With REST fallback
+- [x] **Internal channel** - Staff-to-technician communication
+- [x] **Customer channel** - Staff-to-customer communication (with visibility warning)
+- [x] **Chat threads** - Per-job conversation tracking
+- [x] **Message types** - Text, system messages
+- [x] **Sender info** - Name, role badge, avatar, timestamp
+- [x] Integrated into Job Detail page as new "Chat" tab
+
+### Multi-Warehouse Inventory (RFC-002 Section 4.6) - NEW
+- [x] **Location Management** - Warehouses, trucks, satellites, vendors
+- [x] **Location Types** - Primary warehouse designation
+- [x] **Stock View** - Per-location inventory tracking
+- [x] **Stock Levels** - On-hand, reserved, available quantities
+- [x] **Min/Max Thresholds** - Reorder points with alerts
+- [x] **Inventory Transfers** - Create, approve, receive workflow
+- [x] **Transfer Status** - Pending, In Transit, Received, Cancelled
+- [x] New "Warehouse" page in sidebar navigation
+
+### Install Project Billing (RFC-002 Section 4.5.3)
+- [x] **Milestone Templates** - 4 predefined configurable templates
 - [x] **Template Management** - Create, edit, configure templates
 - [x] **Project Billing Page** - Apply templates, track milestones
 - [x] **Milestone Invoicing** - Auto-generate invoices from milestones
@@ -72,7 +87,7 @@ Build a modern HVAC field service management system per RFC-002 with comprehensi
 - [x] CSV import wizard (4-step process)
 - [x] Support for: Customers, Leads, Jobs, Inventory, Equipment
 
-### Customer Portal Enhancements - NEW
+### Customer Portal Enhancements
 - [x] **Reschedule Requests** - Request appointment changes (requires dispatcher approval)
 - [x] **Multiple Auth Options** - Password login AND magic link authentication
 - [x] **Service History** - View past jobs and invoices
@@ -81,6 +96,24 @@ Build a modern HVAC field service management system per RFC-002 with comprehensi
 - [x] **Support Requests** - Submit new service requests
 
 ## API Endpoints Summary
+
+### Job Chat
+- `GET /api/jobs/{job_id}/chat/{channel}/messages` - Get messages for channel
+- `POST /api/jobs/{job_id}/chat/{channel}/message` - Post a message
+- `GET /api/jobs/{job_id}/chat/threads` - Get chat threads
+- `GET /api/chat/unread-counts` - Get unread message counts
+- `WS /ws/chat/{job_id}/{channel}` - WebSocket connection
+
+### Multi-Warehouse Inventory
+- `GET /api/inventory/locations` - List all locations
+- `POST /api/inventory/locations` - Create new location
+- `PUT /api/inventory/locations/{id}` - Update location
+- `GET /api/inventory/locations/{id}/stock` - Get stock for location
+- `PUT /api/inventory/locations/{id}/stock/{item_id}` - Update stock levels
+- `GET /api/inventory/transfers` - List all transfers
+- `POST /api/inventory/transfers` - Create new transfer
+- `PUT /api/inventory/transfers/{id}/approve` - Approve transfer
+- `PUT /api/inventory/transfers/{id}/receive` - Mark transfer received
 
 ### Milestone Templates
 - `GET /api/milestone-templates` - List all templates
@@ -99,51 +132,52 @@ Build a modern HVAC field service management system per RFC-002 with comprehensi
 - `PUT /api/reschedule-requests/{id}/approve` - Approve with date/time
 - `PUT /api/reschedule-requests/{id}/reject` - Reject with reason
 
-### Support Requests
-- `GET /api/support-requests` - List all support requests
-- `POST /api/customer/{id}/support-request` - Create support request
-- `PUT /api/support-requests/{id}` - Update status/assignment
-
 ## Test Credentials
 - **Demo Admin**: Click "Admin" button on login page
+- **Test User**: test@breezeflow.com / test123
 - **Customer Portal**: https://hvac-business-hub.preview.emergentagent.com/customer
 
 ## Remaining/Future Tasks
 
 ### P2 - Medium Priority
-- [ ] Google Maps route calculation (needs user API key)
-- [ ] Internal job-scoped chat
-- [ ] ESLint config fix for TypeScript
+- [ ] Google Maps route calculation (BLOCKED - needs user API key)
+- [ ] Mobile app (React Native)
+- [ ] Deeper accounting integration (bi-directional sync)
 
 ### P3 - Lower Priority
-- [ ] Multi-warehouse inventory sync
-- [ ] Deeper accounting integration
-- [ ] Mobile app (React Native)
+- [ ] Read receipts for chat
+- [ ] Typing indicators for chat
+- [ ] Advanced inventory reporting
 
 ## File Structure
 ```
 /app/
 ├── backend/
-│   ├── server.py (~6800 lines)
-│   ├── models.py (~2300 lines)
+│   ├── server.py (~7450 lines)
+│   ├── models.py (~2440 lines)
 │   └── tests/
-│       └── test_milestone_reschedule.py
+│       ├── test_milestone_reschedule.py
+│       └── test_chat_inventory.py (NEW)
 ├── frontend/
 │   ├── src/
+│   │   ├── components/
+│   │   │   └── JobChat.tsx (NEW)
 │   │   ├── pages/
-│   │   │   ├── ProjectBilling.tsx (NEW)
+│   │   │   ├── InventoryManagement.tsx (NEW)
+│   │   │   ├── ProjectBilling.tsx
 │   │   │   ├── Checklists.tsx
 │   │   │   ├── ReportsBuilder.tsx
 │   │   │   ├── SchedulingBoard.tsx
-│   │   │   ├── CustomerPortal.tsx (ENHANCED)
+│   │   │   ├── CustomerPortal.tsx
 │   │   │   └── ...
-│   │   └── lib/api.ts (~2600 lines)
+│   │   └── lib/api.ts (~2740 lines)
 │   └── package.json
 ├── memory/
 │   └── PRD.md
 └── test_reports/
-    └── iteration_6.json
+    ├── iteration_6.json
+    └── iteration_7.json (NEW)
 ```
 
 ## Last Updated
-March 2, 2026 - Install Project Billing and Customer Portal Enhancements complete
+March 2, 2026 - Job Chat and Multi-Warehouse Inventory features complete
