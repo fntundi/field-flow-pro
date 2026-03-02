@@ -2155,3 +2155,147 @@ export const customerEquipmentApi = {
       body: JSON.stringify(data),
     }),
 };
+
+// ==================== AUTHENTICATION API ====================
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+  avatar_url?: string;
+  phone?: string;
+  auth_provider: 'local' | 'google';
+}
+
+export interface TokenResponse {
+  access_token: string;
+  token_type: string;
+  user: AuthUser;
+}
+
+export const authApi = {
+  register: (data: { email: string; password: string; name: string; role?: string }) =>
+    fetchApi<TokenResponse>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  
+  login: (data: { email: string; password: string }) =>
+    fetchApi<TokenResponse>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  
+  getMe: () => fetchApi<AuthUser>('/auth/me'),
+  
+  updateMe: (data: { name?: string; phone?: string; avatar_url?: string }) =>
+    fetchApi<AuthUser>('/auth/me', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  
+  changePassword: (data: { current_password: string; new_password: string }) =>
+    fetchApi<{ message: string }>('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  
+  getUsers: () => fetchApi<AuthUser[]>('/auth/users'),
+  
+  updateUserRole: (userId: string, role: string) =>
+    fetchApi<{ message: string }>(`/auth/users/${userId}/role`, {
+      method: 'PUT',
+      body: JSON.stringify({ role }),
+    }),
+};
+
+// ==================== AI FEATURES API ====================
+
+export const aiApi = {
+  getSchedulingSuggestions: (data: { jobs?: any[]; technicians?: any[]; new_job?: any }) =>
+    fetchApi<{ suggestions: string; ai_model: string }>('/ai/scheduling-suggestions', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  
+  generateJobSummary: (data: { job_id?: string; job_type?: string; title?: string; description?: string; notes?: string; customer_name?: string; address?: string; equipment_used?: string }) =>
+    fetchApi<{ summary: string; ai_model: string }>('/ai/job-summary', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  
+  getPredictiveMaintenance: (data: { equipment?: any; service_history?: any[] }) =>
+    fetchApi<{ predictions: string; ai_model: string }>('/ai/predictive-maintenance', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+};
+
+// ==================== IMPORT WIZARD API ====================
+
+export interface ImportValidation {
+  total_records: number;
+  valid_records: number;
+  invalid_records: number;
+  errors: { row: number; errors: string[] }[];
+  warnings: { row: number; warnings: string[] }[];
+  can_import: boolean;
+}
+
+export interface ImportResult {
+  imported: number;
+  skipped: number;
+  errors: number;
+  error_details: { row: number; error: string }[];
+  message: string;
+}
+
+export interface ImportTemplate {
+  columns: string[];
+  sample_row: string[];
+}
+
+export const importApi = {
+  validate: (data: { type: string; records: any[] }) =>
+    fetchApi<ImportValidation>('/import/validate', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  
+  process: (data: { type: string; records: any[]; skip_duplicates?: boolean }) =>
+    fetchApi<ImportResult>('/import/process', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  
+  getTemplate: (importType: string) =>
+    fetchApi<ImportTemplate>(`/import/templates/${importType}`),
+};
+
+// ==================== REPORTS API ====================
+
+export interface ReportSummary {
+  jobs: { total: number; completed: number; completion_rate: number };
+  revenue: { total: number; invoice_count: number };
+  leads: { total: number; won: number; conversion_rate: number };
+  technicians: { total: number };
+}
+
+export const reportsApi = {
+  getSummary: () => fetchApi<ReportSummary>('/reports/summary'),
+  
+  query: (data: {
+    entity: string;
+    filters?: Record<string, any>;
+    group_by?: string;
+    date_range?: { start?: string; end?: string; field?: string };
+    aggregations?: string[];
+    sum_field?: string;
+    avg_field?: string;
+  }) =>
+    fetchApi<{ entity: string; filters: any; group_by?: string; results: any[] }>('/reports/query', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+};
