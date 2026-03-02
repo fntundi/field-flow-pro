@@ -2826,10 +2826,11 @@ Keep response focused and actionable."""
 
     try:
         session_id = f"maintenance-{str(uuid.uuid4())[:8]}"
-        response = await get_gemini_response(prompt, session_id)
+        result = await get_ai_response_with_failover(prompt, session_id)
         return {
-            "predictions": response,
-            "ai_model": "gemini-2.0-flash"
+            "predictions": result["response"],
+            "ai_model": f"{result['provider']}/{result['model']}",
+            "failover_used": result.get("failover_used", False)
         }
     except Exception as e:
         logger.error(f"AI predictive maintenance error: {e}")
