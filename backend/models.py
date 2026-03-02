@@ -2275,3 +2275,163 @@ class SupportRequestCreate(BaseModel):
     service_address: Optional[str] = None
     equipment_id: Optional[str] = None
     priority: str = "normal"
+
+
+# ==================== JOB CHAT ====================
+
+class ChatMessage(BaseModel):
+    """Chat message in a job conversation"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    job_id: str
+    channel: Literal["internal", "customer"] = "internal"  # internal = office/tech only, customer = includes customer
+    
+    # Sender
+    sender_id: str
+    sender_name: str
+    sender_role: str  # "admin", "dispatcher", "technician", "customer"
+    sender_avatar_url: Optional[str] = None
+    
+    # Message content
+    message_type: Literal["text", "image", "system"] = "text"
+    content: str
+    image_url: Optional[str] = None  # For image messages
+    
+    # Metadata
+    is_read: bool = False
+    read_by: List[str] = []  # User IDs who have read
+    
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class ChatThread(BaseModel):
+    """Chat thread for a job"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    job_id: str
+    channel: Literal["internal", "customer"] = "internal"
+    
+    # Participants
+    participants: List[dict] = []  # [{user_id, name, role, joined_at}]
+    
+    # Message count
+    message_count: int = 0
+    last_message_at: Optional[datetime] = None
+    last_message_preview: Optional[str] = None
+    
+    # Status
+    is_active: bool = True
+    
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+# ==================== MULTI-WAREHOUSE INVENTORY ====================
+
+class InventoryLocation(BaseModel):
+    """Inventory storage location (warehouse, truck, etc.)"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    location_type: Literal["warehouse", "truck", "satellite", "vendor"] = "warehouse"
+    
+    # Address (for warehouses/satellites)
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    zip_code: Optional[str] = None
+    
+    # For trucks
+    truck_id: Optional[str] = None
+    assigned_technician_id: Optional[str] = None
+    
+    # Contact
+    manager_name: Optional[str] = None
+    phone: Optional[str] = None
+    
+    # Status
+    is_active: bool = True
+    is_primary: bool = False  # Primary warehouse
+    
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class LocationInventory(BaseModel):
+    """Inventory stock at a specific location"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    location_id: str
+    item_id: str  # Reference to inventory_items
+    
+    # Stock levels
+    quantity_on_hand: int = 0
+    quantity_reserved: int = 0  # Reserved for jobs
+    quantity_available: int = 0  # on_hand - reserved
+    
+    # Thresholds
+    min_quantity: int = 0
+    max_quantity: int = 100
+    reorder_point: int = 0
+    
+    # Cost tracking
+    average_cost: float = 0
+    total_value: float = 0
+    
+    last_counted_at: Optional[datetime] = None
+    last_restocked_at: Optional[datetime] = None
+    
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class InventoryTransfer(BaseModel):
+    """Transfer of inventory between locations"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    transfer_number: str = Field(default_factory=lambda: f"TRF-{str(uuid.uuid4())[:8].upper()}")
+    
+    # Locations
+    from_location_id: str
+    from_location_name: str
+    to_location_id: str
+    to_location_name: str
+    
+    # Items
+    items: List[dict] = []  # [{item_id, item_name, quantity, unit_cost}]
+    
+    # Status
+    status: Literal["pending", "in_transit", "received", "cancelled"] = "pending"
+    
+    # People
+    requested_by_id: str
+    requested_by_name: str
+    approved_by_id: Optional[str] = None
+    received_by_id: Optional[str] = None
+    
+    # Dates
+    requested_at: datetime = Field(default_factory=datetime.utcnow)
+    approved_at: Optional[datetime] = None
+    shipped_at: Optional[datetime] = None
+    received_at: Optional[datetime] = None
+    
+    notes: Optional[str] = None
+    
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class InventoryMovement(BaseModel):
+    """Record of inventory movement/transaction"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    location_id: str
+    item_id: str
+    
+    # Movement details
+    movement_type: Literal["receipt", "issue", "transfer_in", "transfer_out", "adjustment", "count"] = "receipt"
+    quantity: int  # Positive for additions, negative for removals
+    
+    # Reference
+    reference_type: Optional[str] = None  # "job", "transfer", "purchase_order", "manual"
+    reference_id: Optional[str] = None
+    reference_number: Optional[str] = None
+    
+    # Before/after
+    quantity_before: int = 0
+    quantity_after: int = 0
+    
+    # Who and when
+    performed_by_id: str
+    performed_by_name: str
+    performed_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    notes: Optional[str] = None
