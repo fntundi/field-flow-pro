@@ -1,7 +1,7 @@
 # BreezeFlow 2.0 - HVAC Field Service Management System
 
 ## Original Problem Statement
-Build a modern HVAC field service management system with:
+Build a modern HVAC field service management system per RFC-002 with:
 - Jira-style jobs board with draggable task cards across configurable statuses
 - Technician profiles with images and relevant information
 - Appointment confirmation pages for customers with technician info
@@ -10,12 +10,18 @@ Build a modern HVAC field service management system with:
 - J-Load calculator for HVAC sizing
 - Truck inventory management with stock checks and audit trails
 - Equipment usage tracking on job completion
+- Lead-to-cash workflow with leads, PCBs, and Good/Better/Best proposals
+- Evidence-based checklists with photo requirements
+- Maintenance agreements with auto-scheduling
+- Customer self-service portal
 
 ## User Personas
 1. **Owner/GM**: Needs revenue metrics, business health KPIs, and team overview
 2. **Dispatcher**: Needs to assign jobs, manage technician schedules, view urgent items
 3. **Technician**: Needs mobile-friendly job management, time tracking, inventory access
 4. **Sales**: Needs lead tracking, quote management, opportunity pipeline
+5. **Accountant**: Needs invoicing, payments, and financial reports
+6. **Lead Tech/Crew Chief**: Additional oversight capabilities for field teams
 
 ## Tech Stack
 - **Frontend**: React 18, TypeScript, Tailwind CSS, Shadcn/UI, Framer Motion
@@ -50,176 +56,228 @@ Build a modern HVAC field service management system with:
 - [x] Automatic inventory deduction from truck
 - [x] Audit trail linking usage to jobs
 
+### RFC-002 Phase 1 - Core Data Models & Backend Foundation (Completed Mar 2, 2026)
+- [x] Enhanced RBAC with 8 system roles: admin, owner, manager, dispatcher, technician, lead_tech, accountant, sales
+- [x] System Settings API with configurable defaults
+- [x] Google Maps integration toggle (configurable boolean, disabled when no API key)
+- [x] AI features toggle
+- [x] Job Type Templates with version control
+- [x] Evidence-based checklist templates (before/after photos, notes, measurements, signatures)
+- [x] Vendor management with payment terms
+- [x] Purchase order management
+- [x] Multi-location inventory model (warehouses, branches, trucks)
+- [x] Invoice model with RFC-002 pricing formula
+- [x] Payment model (card, ACH, check, cash, financing)
+- [x] Customer equipment tracking with warranty management
+
+### RFC-002 Phase 2 - Leads, PCBs & Sales Pipeline (Completed Mar 2, 2026)
+- [x] Lead management with status workflow: New → Contacted → Qualified → Quoted → Won/Lost
+- [x] Lead metrics (total, by status, by source, conversion rate)
+- [x] Lead conversion to customer
+- [x] PCB (Potential Callback) management with workflow: Created → Assigned → Follow-Up → Converted/Closed
+- [x] PCB metrics with overdue tracking
+- [x] PCB conversion to job
+- [x] Good/Better/Best proposal system
+- [x] Proposal options with line items
+- [x] Proposal acceptance and job creation
+- [x] Frontend pages for Leads, PCBs, Proposals
+- [x] Settings page with tabs for General, Integrations, Pricing, Scheduling, Roles
+
+### Previously Implemented Features (Backend Ready)
+- [x] Google Maps route calculation (backend ready, requires API key)
+- [x] Gantt chart for install projects
+- [x] Maintenance agreements with auto-scheduling
+- [x] Customer self-service portal
+- [x] Offline sync mechanism
+
 ## API Endpoints
 
-### Time Tracking
-- `POST /api/time-tracking/shift/start` - Start shift with location
-- `POST /api/time-tracking/shift/end` - End shift
-- `GET /api/time-tracking/shift/active/{tech_id}` - Get active shift
-- `POST /api/time-tracking/job/dispatch` - Dispatch to job
-- `POST /api/time-tracking/job/arrive/{entry_id}` - Arrive at job
-- `POST /api/time-tracking/job/complete/{entry_id}` - Complete job
-- `GET /api/time-tracking/metrics/{tech_id}` - Get technician metrics
+### System Settings (RFC-002)
+- `GET /api/system/settings` - Get system settings (Google Maps toggle, AI toggle, default rates)
+- `PUT /api/system/settings` - Update system settings
 
-### Inventory Management
-- `GET /api/inventory/categories` - Get all categories (10 standard + custom)
-- `POST /api/inventory/categories` - Create custom category
-- `GET /api/inventory/items` - Get all inventory items
-- `POST /api/inventory/items` - Create new item
-- `PUT /api/inventory/items/{id}` - Update item
-- `GET /api/inventory/audit-log` - Get audit trail
+### RBAC (RFC-002 Section 4.9)
+- `GET /api/roles` - Get all system roles (8 predefined)
+- `POST /api/roles` - Create custom role
+- `DELETE /api/roles/{id}` - Delete custom role
 
-### Truck Management
-- `GET /api/trucks` - Get all trucks
-- `GET /api/trucks/{id}` - Get truck details
-- `GET /api/trucks/by-technician/{tech_id}` - Get tech's assigned truck
-- `POST /api/trucks` - Create truck
-- `PUT /api/trucks/{id}` - Update truck
-- `GET /api/truck-inventory/{truck_id}` - Get truck inventory
-- `POST /api/truck-inventory/{truck_id}/add-item` - Add item to truck
+### Leads (RFC-002 Section 4.1.1)
+- `GET /api/leads` - Get leads with filtering (status, source, assigned_to, search)
+- `GET /api/leads/metrics` - Get lead metrics
+- `GET /api/leads/{id}` - Get single lead
+- `POST /api/leads` - Create lead
+- `PUT /api/leads/{id}` - Update lead (status workflow)
+- `POST /api/leads/{id}/convert` - Convert lead to customer
+- `DELETE /api/leads/{id}` - Delete lead
 
-### Stock Check & Restock
-- `GET /api/stock-check/required/{tech_id}` - Check if stock check needed
-- `POST /api/stock-check` - Submit stock check
-- `GET /api/stock-checks` - Get stock check history
-- `GET /api/restock-requests` - Get restock requests
-- `POST /api/restock-requests` - Create manual restock
-- `PUT /api/restock-requests/{id}/status` - Update restock status
+### PCBs - Potential Callbacks (RFC-002 Section 4.1.2)
+- `GET /api/pcbs` - Get PCBs with filtering
+- `GET /api/pcbs/metrics` - Get PCB metrics (overdue count, conversion rate)
+- `GET /api/pcbs/{id}` - Get single PCB
+- `POST /api/pcbs` - Create PCB
+- `PUT /api/pcbs/{id}` - Update PCB status
+- `POST /api/pcbs/{id}/convert` - Convert PCB to job
+- `DELETE /api/pcbs/{id}` - Delete PCB
 
-### J-Load Calculator
-- `POST /api/jload/quick-estimate` - Quick BTU/tonnage estimate
-- `POST /api/jload/manual-j` - Create Manual J draft
-- `GET /api/jload/manual-j/{id}` - Get Manual J calculation
-- `PUT /api/jload/manual-j/{id}` - Update calculation data
-- `POST /api/jload/manual-j/{id}/calculate` - Run full calculation
-- `GET /api/jload/by-job/{job_id}` - Get calculations for job
+### Proposals (RFC-002 Section 4.1.3)
+- `GET /api/proposals` - Get proposals with filtering
+- `GET /api/proposals/metrics` - Get proposal metrics (win rate, open quotes)
+- `GET /api/proposals/{id}` - Get single proposal
+- `POST /api/proposals` - Create proposal
+- `PUT /api/proposals/{id}` - Update proposal
+- `POST /api/proposals/{id}/options` - Add Good/Better/Best option
+- `POST /api/proposals/{id}/accept` - Accept proposal and create job
 
-### Equipment Usage
-- `POST /api/jobs/{job_id}/equipment-usage` - Create usage record
-- `GET /api/jobs/{job_id}/equipment-usage` - Get usage for job
-- `POST /api/jobs/{job_id}/equipment-usage/approve` - Tech approval
+### Job Types & Templates (RFC-002 Section 4.2.1)
+- `GET /api/job-types` - Get job type templates (4 defaults with checklists)
+- `POST /api/job-types` - Create custom job type
+- `PUT /api/job-types/{id}` - Update job type (versioned)
 
-## Data Models
+### Job Checklists (RFC-002 Section 4.2.2)
+- `GET /api/jobs/{id}/checklist` - Get job checklist
+- `POST /api/jobs/{id}/checklist` - Create checklist from template
+- `PUT /api/jobs/{id}/checklist/items/{item_id}` - Update checklist item (add evidence, mark complete)
 
-### Inventory Category
-```
-{id, name, description, is_standard, icon, sort_order}
-```
+### Vendors (RFC-002 Section 4.7.2)
+- `GET /api/vendors` - Get vendors
+- `GET /api/vendors/{id}` - Get single vendor
+- `POST /api/vendors` - Create vendor
+- `PUT /api/vendors/{id}` - Update vendor
 
-### Inventory Item
-```
-{id, sku, name, description, category_id, unit, unit_cost, retail_price, min_stock_threshold, is_serialized}
-```
+### Purchase Orders (RFC-002 Section 4.7.2)
+- `GET /api/purchase-orders` - Get POs
+- `GET /api/purchase-orders/{id}` - Get single PO
+- `POST /api/purchase-orders` - Create PO
+- `PUT /api/purchase-orders/{id}/status` - Update PO status
 
-### Truck
-```
-{id, truck_number, name, vin, make, model, year, license_plate, assigned_technician_id, status}
-```
+### Invoices (RFC-002 Section 4.6.1)
+- `GET /api/invoices` - Get invoices
+- `GET /api/invoices/{id}` - Get single invoice
+- `POST /api/invoices` - Create invoice
+- `PUT /api/invoices/{id}/status` - Update invoice status
 
-### Truck Inventory
-```
-{id, truck_id, technician_id, items[], last_stock_check, stock_check_required}
-```
+### Payments (RFC-002 Section 4.6.1)
+- `GET /api/payments` - Get payments
+- `POST /api/payments` - Record payment
 
-### Stock Check
-```
-{id, truck_id, technician_id, check_type, items_checked[], items_below_threshold[], status}
-```
+### Customer Equipment (RFC-002 Section 4.7.4)
+- `GET /api/customer-equipment` - Get equipment (with warranty expiring filter)
+- `GET /api/customer-equipment/{id}` - Get single equipment
+- `POST /api/customer-equipment` - Create equipment record
 
-### Restock Request
-```
-{id, truck_id, request_type (auto/manual), items[], priority, status, approved_by}
-```
+## Data Models (RFC-002)
 
-### Job Equipment Usage
+### Lead
 ```
-{id, job_id, technician_id, truck_id, planned_items[], actual_items[], tech_approved, inventory_deducted}
+{id, lead_number, contact_name, contact_email, contact_phone, company_name, address, city, state, zip_code, source, status (new/contacted/qualified/quoted/won/lost), assigned_to_id, estimated_value, priority, tags[]}
 ```
 
-### Inventory Audit Log
+### PCB (Potential Callback)
 ```
-{id, truck_id, item_id, action, quantity_before, quantity_change, quantity_after, job_id, performed_by_id}
+{id, pcb_number, lead_id, job_id, customer_id, customer_name, reason, reason_category (follow_up/upsell/warranty/complaint/question/other), status (created/assigned/follow_up/converted/closed), assigned_technician_id, follow_up_date, priority}
 ```
 
-### J-Load Quick Estimate
+### Proposal
 ```
-{id, job_id, square_footage, climate_zone, building_type, cooling_btuh, heating_btuh, recommended_tonnage}
+{id, proposal_number, lead_id, customer_name, site_address, title, options[], status (draft/sent/viewed/accepted/rejected/expired), valid_until}
+```
+
+### ProposalOption (Good/Better/Best)
+```
+{id, tier (good/better/best), name, description, line_items[], equipment_total, labor_total, subtotal, total, is_recommended}
+```
+
+### JobTypeTemplate
+```
+{id, name, category (residential_service/residential_install/commercial_service/commercial_install), checklist_items[], version, is_active}
+```
+
+### ChecklistItemTemplate
+```
+{id, order, description, requires_before_photo, requires_after_photo, requires_note, requires_measurement, requires_signature, is_required}
+```
+
+### Invoice
+```
+{id, invoice_number, job_id, customer_name, line_items[], labor_total, parts_total, trip_total, subtotal, tax_amount, total, status (draft/sent/partially_paid/paid/void), balance_due}
+```
+
+### Vendor
+```
+{id, vendor_number, name, contact_name, email, phone, address, payment_terms, is_active}
+```
+
+### CustomerEquipment
+```
+{id, customer_id, equipment_type, manufacturer, model, serial_number, install_date, warranty_end_date, is_in_warranty, warranty_expiring_soon}
 ```
 
 ## Prioritized Backlog
 
-### P0 - Critical
-- [x] Dual clock-in system (DONE)
-- [x] Mobile technician dashboard (DONE)
-- [x] Truck inventory management (DONE)
-- [ ] Route & travel time calculation (needs mapping API integration)
+### P0 - Critical (DONE)
+- [x] Dual clock-in system 
+- [x] Mobile technician dashboard 
+- [x] Truck inventory management 
+- [x] Leads, PCBs, Proposals (RFC-002 Phase 2)
 
 ### P1 - High Priority
+- [ ] Route & travel time calculation (needs Google Maps API key)
 - [ ] AI feature implementation (smart scheduling, job summaries)
 - [ ] Basic authentication/login system
-- [ ] Customer-facing job status tracking
+- [ ] Frontend for evidence-based checklists on jobs
 
 ### P2 - Medium Priority
-- [ ] Gantt-style board for multi-day installs
-- [ ] Recurring maintenance & agreements
-- [ ] Deeper accounting integration
-- [ ] Offline conflict resolution
-- [ ] Customer self-service portal
+- [ ] Frontend for Gantt-style board (backend ready)
+- [ ] Frontend for maintenance agreements (backend ready)
+- [ ] Frontend for customer portal (backend ready)
+- [ ] Invoice & payment UI
+- [ ] Vendor & PO management UI
 
 ### P3 - Lower Priority
 - [ ] Install project billing (milestone-based)
 - [ ] Import wizards for data onboarding
 - [ ] Ad-hoc reporting builder
 - [ ] Multi-warehouse inventory support
-- [ ] Vendor management
+- [ ] Change order management
 
-## Known Limitations / Mocked Features
-1. **Route Estimation**: Uses Haversine distance formula with average speed, not actual routing API
+## Known Limitations
+1. **Google Maps**: Backend ready but disabled - requires GOOGLE_MAPS_API_KEY in backend/.env
 2. **J-Load Calculations**: Uses simplified BTU/sq ft formulas, not full ACCA Manual J software
 3. **Authentication**: No user login implemented yet (demo mode with role switching)
-
-## Demo Data
-Seed data includes:
-- 6 technicians with varied specialties
-- 8+ jobs across service and install types
-- 4 trucks assigned to technicians
-- 14 inventory items across 10 categories
-- Stock levels randomized around thresholds
+4. **AI Features**: Toggle exists but features not implemented
 
 ## File Structure
 ```
 /app/
 ├── backend/
-│   ├── models.py (830+ lines - all data models)
-│   ├── server.py (2700+ lines - all API endpoints)
+│   ├── models.py (2000+ lines - all data models including RFC-002)
+│   ├── server.py (5200+ lines - all API endpoints)
 │   └── requirements.txt
 ├── frontend/
 │   ├── src/
 │   │   ├── components/
 │   │   │   ├── technician/
-│   │   │   │   ├── TechnicianMobileDashboard.tsx
-│   │   │   │   └── EquipmentApprovalSheet.tsx
 │   │   │   ├── kanban/
 │   │   │   ├── ui/ (Shadcn components)
-│   │   │   ├── AppLayout.tsx
-│   │   │   ├── AppSidebar.tsx
-│   │   │   └── Breadcrumbs.tsx
+│   │   │   └── ...
 │   │   ├── lib/
-│   │   │   └── api.ts (780+ lines - all API functions)
+│   │   │   └── api.ts (2000+ lines - all API functions)
 │   │   └── pages/
 │   │       ├── Index.tsx (Dashboard)
-│   │       ├── Jobs.tsx
-│   │       ├── JobDetail.tsx (Kanban)
-│   │       ├── Technicians.tsx
-│   │       ├── TechnicianDetail.tsx
-│   │       ├── CallIntake.tsx
-│   │       └── AppointmentConfirmation.tsx
+│   │       ├── Jobs.tsx / JobDetail.tsx
+│   │       ├── Leads.tsx (RFC-002)
+│   │       ├── Proposals.tsx (RFC-002)
+│   │       ├── Settings.tsx (RFC-002)
+│   │       ├── GanttChart.tsx
+│   │       ├── CustomerPortal.tsx
+│   │       ├── MaintenanceAgreements.tsx
+│   │       └── ...
 │   └── package.json
 ├── memory/
 │   └── PRD.md (this file)
 └── test_reports/
-    └── iteration_1.json
+    └── iteration_3.json
 ```
 
 ## Last Updated
-March 2, 2026 - Phase 2 complete (inventory, mobile dashboard, J-Load)
+March 2, 2026 - RFC-002 Phases 1 & 2 complete (RBAC, Settings, Leads, PCBs, Proposals)
