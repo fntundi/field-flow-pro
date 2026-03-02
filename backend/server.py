@@ -4168,6 +4168,652 @@ async def update_support_request(request_id: str, data: dict):
     await db.support_requests.update_one({"id": request_id}, {"$set": update_data})
     return {"message": "Request updated"}
 
+# ==================== JOB CHAT (WebSocket) API ====================
+
+class ConnectionManager:
+    """WebSocket connection manager for real-time chat"""
+    def __init__(self):
+        # job_id -> channel -> set of websocket connections
+        self.active_connections: Dict[str, Dict[str, Set[WebSocket]]] = {}
+        # websocket -> user info
+        self.connection_info: Dict[WebSocket, dict] = {}
+
+    async def connect(self, websocket: WebSocket, job_id: str, channel: str, user_info: dict):
+        await websocket.accept()
+        if job_id not in self.active_connections:
+            self.active_connections[job_id] = {"internal": set(), "customer": set()}
+        self.active_connections[job_id][channel].add(websocket)
+        self.connection_info[websocket] = {"job_id": job_id, "channel": channel, "user": user_info}
+        logger.info(f"WebSocket connected: {user_info.get('name')} to job {job_id} ({channel})")
+
+    def disconnect(self, websocket: WebSocket):
+        info = self.connection_info.get(websocket)
+        if info:
+            job_id = info["job_id"]
+            channel = info["channel"]
+            if job_id in self.active_connections and channel in self.active_connections[job_id]:
+                self.active_connections[job_id][channel].discard(websocket)
+            del self.connection_info[websocket]
+            logger.info(f"WebSocket disconnected from job {job_id}")
+
+    async def broadcast_to_job(self, job_id: str, channel: str, message: dict):
+        """Broadcast message to all connections in a job channel"""
+        if job_id not in self.active_connections:
+            return
+        
+        connections = self.active_connections[job_id].get(channel, set())
+        disconnected = set()
+        
+        for connection in connections:
+            try:
+                await connection.send_json(message)
+            except Exception as e:
+                logger.error(f"Error sending message: {e}")
+                disconnected.add(connection)
+        
+        # Clean up disconnected
+        for conn in disconnected:
+            self.disconnect(conn)
+
+    def get_online_users(self, job_id: str, channel: str) -> List[dict]:
+        """Get list of online users in a job channel"""
+        if job_id not in self.active_connections:
+            return []
+        
+        users = []
+        for conn in self.active_connections[job_id].get(channel, set()):
+            info = self.connection_info.get(conn)
+            if info:
+                users.append(info["user"])
+        return users
+
+chat_manager = ConnectionManager()
+
+@app.websocket("/ws/chat/{job_id}/{channel}")
+async def websocket_chat(websocket: WebSocket, job_id: str, channel: str):
+    """WebSocket endpoint for job chat"""
+    # Get token from query params
+    token = websocket.query_params.get("token")
+    if not token:
+        await websocket.close(code=4001, reason="Missing token")
+        return
+    
+    # Validate token
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        user_id = payload.get("sub")
+        user = await db.auth_users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+        if not user:
+            await websocket.close(code=4001, reason="Invalid token")
+            return
+    except jwt.ExpiredSignatureError:
+        await websocket.close(code=4001, reason="Token expired")
+        return
+    except jwt.InvalidTokenError:
+        await websocket.close(code=4001, reason="Invalid token")
+        return
+    
+    # Validate channel access
+    if channel == "internal" and user.get("role") == "customer":
+        await websocket.close(code=4003, reason="Access denied to internal channel")
+        return
+    
+    user_info = {
+        "id": user["id"],
+        "name": user.get("name", "Unknown"),
+        "role": user.get("role", "user"),
+        "avatar_url": user.get("avatar_url"),
+    }
+    
+    await chat_manager.connect(websocket, job_id, channel, user_info)
+    
+    # Send online users list
+    online_users = chat_manager.get_online_users(job_id, channel)
+    await websocket.send_json({"type": "users_online", "users": online_users})
+    
+    # Broadcast user joined
+    await chat_manager.broadcast_to_job(job_id, channel, {
+        "type": "user_joined",
+        "user": user_info,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    })
+    
+    try:
+        while True:
+            data = await websocket.receive_json()
+            message_type = data.get("type", "message")
+            
+            if message_type == "message":
+                # Save message to database
+                message = {
+                    "id": str(uuid.uuid4()),
+                    "job_id": job_id,
+                    "channel": channel,
+                    "sender_id": user["id"],
+                    "sender_name": user.get("name", "Unknown"),
+                    "sender_role": user.get("role", "user"),
+                    "sender_avatar_url": user.get("avatar_url"),
+                    "message_type": data.get("message_type", "text"),
+                    "content": sanitize_string(data.get("content", ""), 2000),
+                    "image_url": data.get("image_url"),
+                    "is_read": False,
+                    "read_by": [user["id"]],
+                    "created_at": datetime.now(timezone.utc),
+                }
+                
+                await db.chat_messages.insert_one(message)
+                
+                # Update thread
+                await db.chat_threads.update_one(
+                    {"job_id": job_id, "channel": channel},
+                    {
+                        "$set": {
+                            "last_message_at": message["created_at"],
+                            "last_message_preview": message["content"][:100],
+                            "updated_at": datetime.now(timezone.utc),
+                        },
+                        "$inc": {"message_count": 1}
+                    },
+                    upsert=True
+                )
+                
+                # Broadcast to all in channel
+                message["created_at"] = message["created_at"].isoformat()
+                await chat_manager.broadcast_to_job(job_id, channel, {
+                    "type": "new_message",
+                    "message": message,
+                })
+            
+            elif message_type == "typing":
+                await chat_manager.broadcast_to_job(job_id, channel, {
+                    "type": "typing",
+                    "user": user_info,
+                })
+            
+            elif message_type == "read":
+                # Mark messages as read
+                message_ids = data.get("message_ids", [])
+                if message_ids:
+                    await db.chat_messages.update_many(
+                        {"id": {"$in": message_ids}},
+                        {"$addToSet": {"read_by": user["id"]}}
+                    )
+    
+    except WebSocketDisconnect:
+        chat_manager.disconnect(websocket)
+        await chat_manager.broadcast_to_job(job_id, channel, {
+            "type": "user_left",
+            "user": user_info,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
+        chat_manager.disconnect(websocket)
+
+# Chat REST API endpoints
+@api_router.get("/jobs/{job_id}/chat/{channel}/messages")
+async def get_chat_messages(job_id: str, channel: str, limit: int = 50, before: Optional[str] = None):
+    """Get chat messages for a job"""
+    if not validate_uuid(job_id):
+        raise HTTPException(status_code=400, detail="Invalid job ID")
+    
+    if channel not in ["internal", "customer"]:
+        raise HTTPException(status_code=400, detail="Invalid channel")
+    
+    query = {"job_id": job_id, "channel": channel}
+    if before:
+        query["created_at"] = {"$lt": datetime.fromisoformat(before)}
+    
+    messages = await db.chat_messages.find(query).sort("created_at", -1).limit(limit).to_list(limit)
+    
+    # Return in chronological order
+    for m in messages:
+        m.pop("_id", None)
+        if isinstance(m.get("created_at"), datetime):
+            m["created_at"] = m["created_at"].isoformat()
+    
+    return list(reversed(messages))
+
+@api_router.get("/jobs/{job_id}/chat/threads")
+async def get_chat_threads(job_id: str):
+    """Get chat threads for a job"""
+    if not validate_uuid(job_id):
+        raise HTTPException(status_code=400, detail="Invalid job ID")
+    
+    threads = await db.chat_threads.find({"job_id": job_id}).to_list(10)
+    for t in threads:
+        t.pop("_id", None)
+        if isinstance(t.get("last_message_at"), datetime):
+            t["last_message_at"] = t["last_message_at"].isoformat()
+    
+    return threads
+
+@api_router.post("/jobs/{job_id}/chat/{channel}/message")
+async def post_chat_message(job_id: str, channel: str, data: dict, user: dict = Depends(require_auth)):
+    """Post a chat message (REST fallback for non-WebSocket clients)"""
+    if not validate_uuid(job_id):
+        raise HTTPException(status_code=400, detail="Invalid job ID")
+    
+    if channel not in ["internal", "customer"]:
+        raise HTTPException(status_code=400, detail="Invalid channel")
+    
+    # Check channel access
+    if channel == "internal" and user.get("role") == "customer":
+        raise HTTPException(status_code=403, detail="Access denied to internal channel")
+    
+    message = {
+        "id": str(uuid.uuid4()),
+        "job_id": job_id,
+        "channel": channel,
+        "sender_id": user["id"],
+        "sender_name": user.get("name", "Unknown"),
+        "sender_role": user.get("role", "user"),
+        "sender_avatar_url": user.get("avatar_url"),
+        "message_type": data.get("message_type", "text"),
+        "content": sanitize_string(data.get("content", ""), 2000),
+        "image_url": data.get("image_url"),
+        "is_read": False,
+        "read_by": [user["id"]],
+        "created_at": datetime.now(timezone.utc),
+    }
+    
+    await db.chat_messages.insert_one(message)
+    
+    # Update thread
+    await db.chat_threads.update_one(
+        {"job_id": job_id, "channel": channel},
+        {
+            "$set": {
+                "last_message_at": message["created_at"],
+                "last_message_preview": message["content"][:100],
+                "updated_at": datetime.now(timezone.utc),
+            },
+            "$inc": {"message_count": 1}
+        },
+        upsert=True
+    )
+    
+    # Broadcast via WebSocket
+    message["created_at"] = message["created_at"].isoformat()
+    await chat_manager.broadcast_to_job(job_id, channel, {
+        "type": "new_message",
+        "message": message,
+    })
+    
+    return message
+
+@api_router.get("/chat/unread-counts")
+async def get_unread_counts(user: dict = Depends(require_auth)):
+    """Get unread message counts by job"""
+    user_id = user["id"]
+    
+    # Aggregate unread counts
+    pipeline = [
+        {"$match": {"read_by": {"$nin": [user_id]}}},
+        {"$group": {"_id": {"job_id": "$job_id", "channel": "$channel"}, "count": {"$sum": 1}}},
+    ]
+    
+    results = await db.chat_messages.aggregate(pipeline).to_list(100)
+    
+    counts = {}
+    for r in results:
+        job_id = r["_id"]["job_id"]
+        channel = r["_id"]["channel"]
+        if job_id not in counts:
+            counts[job_id] = {"internal": 0, "customer": 0}
+        counts[job_id][channel] = r["count"]
+    
+    return counts
+
+# ==================== MULTI-WAREHOUSE INVENTORY API ====================
+
+@api_router.get("/inventory/locations")
+async def get_inventory_locations(location_type: Optional[str] = None, active_only: bool = True):
+    """Get all inventory locations"""
+    query = {}
+    if location_type:
+        query["location_type"] = location_type
+    if active_only:
+        query["is_active"] = True
+    
+    locations = await db.inventory_locations.find(query).sort("name", 1).to_list(100)
+    for loc in locations:
+        loc.pop("_id", None)
+    return locations
+
+@api_router.post("/inventory/locations")
+async def create_inventory_location(data: dict):
+    """Create a new inventory location"""
+    location = {
+        "id": str(uuid.uuid4()),
+        "name": sanitize_string(data.get("name", ""), 200),
+        "location_type": data.get("location_type", "warehouse"),
+        "address": data.get("address"),
+        "city": data.get("city"),
+        "state": data.get("state"),
+        "zip_code": data.get("zip_code"),
+        "truck_id": data.get("truck_id"),
+        "assigned_technician_id": data.get("assigned_technician_id"),
+        "manager_name": data.get("manager_name"),
+        "phone": data.get("phone"),
+        "is_active": True,
+        "is_primary": data.get("is_primary", False),
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc),
+    }
+    
+    # If setting as primary, unset others
+    if location["is_primary"]:
+        await db.inventory_locations.update_many({}, {"$set": {"is_primary": False}})
+    
+    await db.inventory_locations.insert_one(location)
+    location.pop("_id", None)
+    return location
+
+@api_router.put("/inventory/locations/{location_id}")
+async def update_inventory_location(location_id: str, data: dict):
+    """Update an inventory location"""
+    if not validate_uuid(location_id):
+        raise HTTPException(status_code=400, detail="Invalid location ID")
+    
+    location = await db.inventory_locations.find_one({"id": location_id})
+    if not location:
+        raise HTTPException(status_code=404, detail="Location not found")
+    
+    update_data = {k: v for k, v in data.items() if k in [
+        "name", "location_type", "address", "city", "state", "zip_code",
+        "truck_id", "assigned_technician_id", "manager_name", "phone", "is_active", "is_primary"
+    ]}
+    update_data["updated_at"] = datetime.now(timezone.utc)
+    
+    if update_data.get("is_primary"):
+        await db.inventory_locations.update_many({}, {"$set": {"is_primary": False}})
+    
+    await db.inventory_locations.update_one({"id": location_id}, {"$set": update_data})
+    
+    updated = await db.inventory_locations.find_one({"id": location_id})
+    updated.pop("_id", None)
+    return updated
+
+@api_router.get("/inventory/locations/{location_id}/stock")
+async def get_location_stock(location_id: str):
+    """Get stock levels for a location"""
+    if not validate_uuid(location_id):
+        raise HTTPException(status_code=400, detail="Invalid location ID")
+    
+    # Get stock records with item details
+    pipeline = [
+        {"$match": {"location_id": location_id}},
+        {"$lookup": {
+            "from": "inventory_items",
+            "localField": "item_id",
+            "foreignField": "id",
+            "as": "item"
+        }},
+        {"$unwind": {"path": "$item", "preserveNullAndEmptyArrays": True}},
+        {"$project": {
+            "_id": 0,
+            "id": 1,
+            "location_id": 1,
+            "item_id": 1,
+            "quantity_on_hand": 1,
+            "quantity_reserved": 1,
+            "quantity_available": 1,
+            "min_quantity": 1,
+            "max_quantity": 1,
+            "reorder_point": 1,
+            "average_cost": 1,
+            "total_value": 1,
+            "item_name": "$item.name",
+            "item_sku": "$item.sku",
+            "item_category": "$item.category",
+        }}
+    ]
+    
+    stock = await db.location_inventory.aggregate(pipeline).to_list(500)
+    return stock
+
+@api_router.put("/inventory/locations/{location_id}/stock/{item_id}")
+async def update_location_stock(location_id: str, item_id: str, data: dict, user: dict = Depends(require_auth)):
+    """Update stock level for an item at a location"""
+    if not validate_uuid(location_id) or not validate_uuid(item_id):
+        raise HTTPException(status_code=400, detail="Invalid ID")
+    
+    # Get current stock
+    stock = await db.location_inventory.find_one({"location_id": location_id, "item_id": item_id})
+    quantity_before = stock.get("quantity_on_hand", 0) if stock else 0
+    
+    new_quantity = data.get("quantity_on_hand", quantity_before)
+    adjustment = new_quantity - quantity_before
+    
+    # Update or create stock record
+    stock_update = {
+        "location_id": location_id,
+        "item_id": item_id,
+        "quantity_on_hand": new_quantity,
+        "quantity_available": new_quantity - (stock.get("quantity_reserved", 0) if stock else 0),
+        "min_quantity": data.get("min_quantity", stock.get("min_quantity", 0) if stock else 0),
+        "max_quantity": data.get("max_quantity", stock.get("max_quantity", 100) if stock else 100),
+        "reorder_point": data.get("reorder_point", stock.get("reorder_point", 0) if stock else 0),
+        "updated_at": datetime.now(timezone.utc),
+    }
+    
+    if stock:
+        await db.location_inventory.update_one(
+            {"location_id": location_id, "item_id": item_id},
+            {"$set": stock_update}
+        )
+    else:
+        stock_update["id"] = str(uuid.uuid4())
+        await db.location_inventory.insert_one(stock_update)
+    
+    # Record movement
+    if adjustment != 0:
+        movement = {
+            "id": str(uuid.uuid4()),
+            "location_id": location_id,
+            "item_id": item_id,
+            "movement_type": "adjustment",
+            "quantity": adjustment,
+            "quantity_before": quantity_before,
+            "quantity_after": new_quantity,
+            "reference_type": "manual",
+            "performed_by_id": user["id"],
+            "performed_by_name": user.get("name", "Unknown"),
+            "performed_at": datetime.now(timezone.utc),
+            "notes": data.get("notes", "Manual adjustment"),
+        }
+        await db.inventory_movements.insert_one(movement)
+    
+    return {"message": "Stock updated", "quantity": new_quantity}
+
+@api_router.post("/inventory/transfers")
+async def create_inventory_transfer(data: dict, user: dict = Depends(require_auth)):
+    """Create an inventory transfer request"""
+    from_location = await db.inventory_locations.find_one({"id": data.get("from_location_id")})
+    to_location = await db.inventory_locations.find_one({"id": data.get("to_location_id")})
+    
+    if not from_location or not to_location:
+        raise HTTPException(status_code=404, detail="Location not found")
+    
+    transfer = {
+        "id": str(uuid.uuid4()),
+        "transfer_number": f"TRF-{str(uuid.uuid4())[:8].upper()}",
+        "from_location_id": from_location["id"],
+        "from_location_name": from_location["name"],
+        "to_location_id": to_location["id"],
+        "to_location_name": to_location["name"],
+        "items": data.get("items", []),
+        "status": "pending",
+        "requested_by_id": user["id"],
+        "requested_by_name": user.get("name", "Unknown"),
+        "requested_at": datetime.now(timezone.utc),
+        "notes": data.get("notes"),
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc),
+    }
+    
+    await db.inventory_transfers.insert_one(transfer)
+    transfer.pop("_id", None)
+    return transfer
+
+@api_router.get("/inventory/transfers")
+async def get_inventory_transfers(status: Optional[str] = None, location_id: Optional[str] = None):
+    """Get inventory transfers"""
+    query = {}
+    if status:
+        query["status"] = status
+    if location_id:
+        query["$or"] = [{"from_location_id": location_id}, {"to_location_id": location_id}]
+    
+    transfers = await db.inventory_transfers.find(query).sort("created_at", -1).to_list(100)
+    for t in transfers:
+        t.pop("_id", None)
+    return transfers
+
+@api_router.put("/inventory/transfers/{transfer_id}/approve")
+async def approve_inventory_transfer(transfer_id: str, user: dict = Depends(require_auth)):
+    """Approve a transfer and mark as in-transit"""
+    if not validate_uuid(transfer_id):
+        raise HTTPException(status_code=400, detail="Invalid transfer ID")
+    
+    transfer = await db.inventory_transfers.find_one({"id": transfer_id})
+    if not transfer:
+        raise HTTPException(status_code=404, detail="Transfer not found")
+    
+    if transfer["status"] != "pending":
+        raise HTTPException(status_code=400, detail="Transfer is not pending")
+    
+    # Deduct from source location
+    for item in transfer.get("items", []):
+        item_id = item.get("item_id")
+        quantity = item.get("quantity", 0)
+        
+        stock = await db.location_inventory.find_one({
+            "location_id": transfer["from_location_id"],
+            "item_id": item_id
+        })
+        
+        if not stock or stock.get("quantity_available", 0) < quantity:
+            raise HTTPException(status_code=400, detail=f"Insufficient stock for item {item.get('item_name')}")
+        
+        # Update source stock
+        await db.location_inventory.update_one(
+            {"location_id": transfer["from_location_id"], "item_id": item_id},
+            {"$inc": {"quantity_on_hand": -quantity, "quantity_available": -quantity}}
+        )
+        
+        # Record movement
+        movement = {
+            "id": str(uuid.uuid4()),
+            "location_id": transfer["from_location_id"],
+            "item_id": item_id,
+            "movement_type": "transfer_out",
+            "quantity": -quantity,
+            "reference_type": "transfer",
+            "reference_id": transfer_id,
+            "reference_number": transfer["transfer_number"],
+            "performed_by_id": user["id"],
+            "performed_by_name": user.get("name", "Unknown"),
+            "performed_at": datetime.now(timezone.utc),
+        }
+        await db.inventory_movements.insert_one(movement)
+    
+    await db.inventory_transfers.update_one(
+        {"id": transfer_id},
+        {"$set": {
+            "status": "in_transit",
+            "approved_by_id": user["id"],
+            "approved_at": datetime.now(timezone.utc),
+            "shipped_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
+        }}
+    )
+    
+    return {"message": "Transfer approved and shipped"}
+
+@api_router.put("/inventory/transfers/{transfer_id}/receive")
+async def receive_inventory_transfer(transfer_id: str, user: dict = Depends(require_auth)):
+    """Receive a transfer at destination"""
+    if not validate_uuid(transfer_id):
+        raise HTTPException(status_code=400, detail="Invalid transfer ID")
+    
+    transfer = await db.inventory_transfers.find_one({"id": transfer_id})
+    if not transfer:
+        raise HTTPException(status_code=404, detail="Transfer not found")
+    
+    if transfer["status"] != "in_transit":
+        raise HTTPException(status_code=400, detail="Transfer is not in transit")
+    
+    # Add to destination location
+    for item in transfer.get("items", []):
+        item_id = item.get("item_id")
+        quantity = item.get("quantity", 0)
+        
+        # Update or create destination stock
+        existing = await db.location_inventory.find_one({
+            "location_id": transfer["to_location_id"],
+            "item_id": item_id
+        })
+        
+        if existing:
+            await db.location_inventory.update_one(
+                {"location_id": transfer["to_location_id"], "item_id": item_id},
+                {"$inc": {"quantity_on_hand": quantity, "quantity_available": quantity}}
+            )
+        else:
+            await db.location_inventory.insert_one({
+                "id": str(uuid.uuid4()),
+                "location_id": transfer["to_location_id"],
+                "item_id": item_id,
+                "quantity_on_hand": quantity,
+                "quantity_reserved": 0,
+                "quantity_available": quantity,
+                "updated_at": datetime.now(timezone.utc),
+            })
+        
+        # Record movement
+        movement = {
+            "id": str(uuid.uuid4()),
+            "location_id": transfer["to_location_id"],
+            "item_id": item_id,
+            "movement_type": "transfer_in",
+            "quantity": quantity,
+            "reference_type": "transfer",
+            "reference_id": transfer_id,
+            "reference_number": transfer["transfer_number"],
+            "performed_by_id": user["id"],
+            "performed_by_name": user.get("name", "Unknown"),
+            "performed_at": datetime.now(timezone.utc),
+        }
+        await db.inventory_movements.insert_one(movement)
+    
+    await db.inventory_transfers.update_one(
+        {"id": transfer_id},
+        {"$set": {
+            "status": "received",
+            "received_by_id": user["id"],
+            "received_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
+        }}
+    )
+    
+    return {"message": "Transfer received"}
+
+@api_router.get("/inventory/movements")
+async def get_inventory_movements(location_id: Optional[str] = None, item_id: Optional[str] = None, limit: int = 100):
+    """Get inventory movement history"""
+    query = {}
+    if location_id:
+        query["location_id"] = location_id
+    if item_id:
+        query["item_id"] = item_id
+    
+    movements = await db.inventory_movements.find(query).sort("performed_at", -1).limit(limit).to_list(limit)
+    for m in movements:
+        m.pop("_id", None)
+    return movements
+
 # ==================== OFFLINE SYNC API ====================
 
 @api_router.post("/sync/batch")
