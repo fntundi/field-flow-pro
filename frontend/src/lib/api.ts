@@ -2214,6 +2214,17 @@ export const authApi = {
       method: 'PUT',
       body: JSON.stringify({ role }),
     }),
+  
+  googleSessionExchange: (sessionId: string) =>
+    fetchApi<TokenResponse>('/auth/google/session', {
+      method: 'POST',
+      body: JSON.stringify({ session_id: sessionId }),
+    }),
+  
+  googleLogout: () =>
+    fetchApi<{ message: string }>('/auth/google/logout', {
+      method: 'POST',
+    }),
 };
 
 // ==================== AI FEATURES API ====================
