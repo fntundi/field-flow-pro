@@ -38,6 +38,7 @@ import SchedulingBoard from "@/pages/SchedulingBoard";
 import ProjectBilling from "@/pages/ProjectBilling";
 import Sites from "@/pages/Sites";
 import Projects from "@/pages/Projects";
+import Communications from "@/pages/Communications";
 import { Loader2 } from "lucide-react";
 import { registerServiceWorker, setupInstallPrompt, offlineStorage } from "@/lib/pwa";
 
