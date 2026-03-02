@@ -638,7 +638,121 @@ export const inventoryApi = {
     const query = searchParams.toString();
     return fetchApi<any[]>(`/inventory/audit-log${query ? `?${query}` : ''}`);
   },
+  
+  // ======= Multi-Location Inventory =======
+  
+  // Locations (warehouses, trucks, etc.)
+  getLocations: () => fetchApi<InventoryLocation[]>('/inventory/locations'),
+  
+  createLocation: (data: Partial<InventoryLocation>) =>
+    fetchApi<InventoryLocation>('/inventory/locations', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  
+  updateLocation: (id: string, data: Partial<InventoryLocation>) =>
+    fetchApi<InventoryLocation>(`/inventory/locations/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  
+  // Location Stock
+  getLocationStock: (locationId: string) =>
+    fetchApi<LocationInventory[]>(`/inventory/locations/${locationId}/stock`),
+  
+  updateLocationStock: (locationId: string, itemId: string, data: Partial<LocationInventory>) =>
+    fetchApi<LocationInventory>(`/inventory/locations/${locationId}/stock/${itemId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  
+  // Transfers
+  getTransfers: (status?: string) => {
+    const query = status ? `?status=${status}` : '';
+    return fetchApi<InventoryTransfer[]>(`/inventory/transfers${query}`);
+  },
+  
+  createTransfer: (data: Partial<InventoryTransfer>) =>
+    fetchApi<InventoryTransfer>('/inventory/transfers', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  
+  approveTransfer: (transferId: string) =>
+    fetchApi<InventoryTransfer>(`/inventory/transfers/${transferId}/approve`, {
+      method: 'PUT',
+    }),
+  
+  receiveTransfer: (transferId: string) =>
+    fetchApi<InventoryTransfer>(`/inventory/transfers/${transferId}/receive`, {
+      method: 'PUT',
+    }),
 };
+
+// Multi-warehouse inventory types
+export interface InventoryLocation {
+  id: string;
+  name: string;
+  location_type: 'warehouse' | 'truck' | 'satellite' | 'vendor';
+  address?: string;
+  city?: string;
+  state?: string;
+  zip_code?: string;
+  truck_id?: string;
+  assigned_technician_id?: string;
+  manager_name?: string;
+  phone?: string;
+  is_active: boolean;
+  is_primary: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LocationInventory {
+  id: string;
+  location_id: string;
+  item_id: string;
+  item_name?: string;
+  item_sku?: string;
+  quantity_on_hand: number;
+  quantity_reserved: number;
+  quantity_available: number;
+  min_quantity: number;
+  max_quantity: number;
+  reorder_point: number;
+  average_cost: number;
+  total_value: number;
+  last_counted_at?: string;
+  last_restocked_at?: string;
+  updated_at: string;
+}
+
+export interface InventoryTransfer {
+  id: string;
+  transfer_number: string;
+  from_location_id: string;
+  from_location_name: string;
+  to_location_id: string;
+  to_location_name: string;
+  items: Array<{
+    item_id: string;
+    item_name: string;
+    quantity: number;
+    unit_cost: number;
+  }>;
+  status: 'pending' | 'in_transit' | 'received' | 'cancelled';
+  requested_by_id: string;
+  requested_by_name: string;
+  approved_by_id?: string;
+  received_by_id?: string;
+  requested_at: string;
+  approved_at?: string;
+  shipped_at?: string;
+  received_at?: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
 
 // ==================== TRUCKS API ====================
 
