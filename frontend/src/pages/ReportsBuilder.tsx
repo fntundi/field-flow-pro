@@ -402,12 +402,12 @@ export default function ReportsBuilder() {
             {/* Group By */}
             <div>
               <Label>Group By</Label>
-              <Select value={groupBy} onValueChange={setGroupBy}>
+              <Select value={groupBy || "none"} onValueChange={(v) => setGroupBy(v === "none" ? "" : v)}>
                 <SelectTrigger>
                   <SelectValue placeholder="None" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">None</SelectItem>
+                  <SelectItem value="none">None</SelectItem>
                   {availableFields.map((field) => (
                     <SelectItem key={field.field} value={field.field}>{field.label}</SelectItem>
                   ))}
