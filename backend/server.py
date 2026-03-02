@@ -2327,6 +2327,19 @@ async def get_jload_calculations_for_job(job_id: str):
 
 # ==================== GOOGLE MAPS ROUTING API ====================
 
+async def get_system_settings():
+    """Get or create system settings"""
+    settings = await db.system_settings.find_one({})
+    if not settings:
+        api_key = os.environ.get("GOOGLE_MAPS_API_KEY")
+        default_settings = SystemSettings(
+            google_maps_enabled=bool(api_key),
+            google_maps_api_key_set=bool(api_key),
+        )
+        await db.system_settings.insert_one(default_settings.dict())
+        return default_settings
+    return SystemSettings(**settings)
+
 def get_google_maps_client():
     """Get Google Maps client if API key is configured"""
     api_key = os.environ.get("GOOGLE_MAPS_API_KEY")
@@ -2334,13 +2347,51 @@ def get_google_maps_client():
         return None
     return googlemaps.Client(key=api_key)
 
+@api_router.get("/system/settings")
+async def get_settings():
+    """Get system settings"""
+    settings = await get_system_settings()
+    return settings
+
+@api_router.put("/system/settings")
+async def update_settings(data: dict):
+    """Update system settings"""
+    settings = await get_system_settings()
+    
+    update_data = {k: v for k, v in data.items() if v is not None}
+    update_data["updated_at"] = datetime.utcnow()
+    
+    # Check if Google Maps API key is present if enabling
+    if update_data.get("google_maps_enabled"):
+        api_key = os.environ.get("GOOGLE_MAPS_API_KEY")
+        if not api_key:
+            update_data["google_maps_enabled"] = False
+            update_data["google_maps_api_key_set"] = False
+        else:
+            update_data["google_maps_api_key_set"] = True
+    
+    await db.system_settings.update_one(
+        {"id": settings.id},
+        {"$set": update_data}
+    )
+    
+    return await get_system_settings()
+
 @api_router.get("/maps/config")
 async def get_maps_config():
-    """Check if Google Maps is configured"""
+    """Check if Google Maps is configured and enabled"""
+    settings = await get_system_settings()
     api_key = os.environ.get("GOOGLE_MAPS_API_KEY")
+    
     return {
         "configured": bool(api_key),
-        "message": "Google Maps API is configured" if api_key else "Google Maps API key not set. Add GOOGLE_MAPS_API_KEY to backend/.env"
+        "enabled": settings.google_maps_enabled and bool(api_key),
+        "message": (
+            "Google Maps API is enabled and configured" 
+            if settings.google_maps_enabled and api_key 
+            else "Google Maps is disabled" if not settings.google_maps_enabled
+            else "Google Maps API key not set. Add GOOGLE_MAPS_API_KEY to backend/.env"
+        )
     }
 
 @api_router.post("/maps/route", response_model=RouteCalculation)
