@@ -3837,6 +3837,7 @@ async def convert_pcb_to_job(pcb_id: str, job_data: Optional[dict] = None):
         job_number=f"JOB-{job_count + 1001}",
         customer_name=pcb.get("customer_name", "Unknown"),
         customer_id=pcb.get("customer_id"),
+        site_address=pcb.get("address", "Address to be provided"),
         job_type="Service",
         title=f"Follow-up: {pcb.get('reason', 'PCB Callback')[:50]}",
         description=pcb.get("notes"),
