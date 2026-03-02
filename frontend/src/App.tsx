@@ -66,7 +66,7 @@ const App = () => (
           <Route path="/invoices" element={<AppLayout><Invoices /></AppLayout>} />
           <Route path="/inventory" element={<AppLayout><Inventory /></AppLayout>} />
           <Route path="/analytics" element={<AppLayout><Analytics /></AppLayout>} />
-          <Route path="/settings" element={<AppLayout><PlaceholderPage title="Settings" subtitle="Roles, permissions, and system configuration" /></AppLayout>} />
+          <Route path="/settings" element={<AppLayout><Settings /></AppLayout>} />
           <Route path="*" element={<AppLayout><NotFound /></AppLayout>} />
         </Routes>
       </BrowserRouter>
