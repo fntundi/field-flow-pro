@@ -2460,7 +2460,7 @@ async def calculate_route_fallback(request: RouteRequest):
         if len(parts) == 2:
             try:
                 return float(parts[0].strip()), float(parts[1].strip())
-            except:
+            except ValueError:
                 pass
         return None, None
     
