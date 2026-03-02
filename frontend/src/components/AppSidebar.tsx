@@ -18,8 +18,9 @@ import {
   Shield,
   DollarSign,
   Wrench,
+  X,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
@@ -40,28 +41,58 @@ const navItems = [
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
 
-const AppSidebar = () => {
+interface AppSidebarProps {
+  isOpen?: boolean;
+  isMobile?: boolean;
+  onClose?: () => void;
+}
+
+const AppSidebar = ({ isOpen = true, isMobile = false, onClose }: AppSidebarProps) => {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
 
+  // Close mobile sidebar on navigation
+  useEffect(() => {
+    if (isMobile && onClose) {
+      onClose();
+    }
+  }, [location.pathname]);
+
+  // Don't render on mobile when closed
+  if (isMobile && !isOpen) {
+    return null;
+  }
+
   return (
     <aside
-      className={`fixed left-0 top-0 h-screen bg-sidebar flex flex-col border-r border-sidebar-border z-50 transition-all duration-300 ${
-        collapsed ? "w-[68px]" : "w-[240px]"
+      className={`fixed left-0 h-screen bg-sidebar flex flex-col border-r border-sidebar-border z-50 transition-all duration-300 ${
+        isMobile
+          ? "top-0 w-[280px]"
+          : `top-0 ${collapsed ? "w-[68px]" : "w-[240px]"}`
       }`}
     >
       {/* Logo */}
-      <div className="flex items-center gap-3 px-4 h-16 border-b border-sidebar-border flex-shrink-0">
-        <div className="w-8 h-8 rounded-lg bg-sidebar-primary flex items-center justify-center flex-shrink-0">
-          <Flame className="w-5 h-5 text-sidebar-primary-foreground" />
-        </div>
-        {!collapsed && (
-          <div className="overflow-hidden">
-            <h1 className="text-sm font-bold text-sidebar-accent-foreground tracking-tight">
-              HVAC Ops
-            </h1>
-            <p className="text-[10px] text-sidebar-muted">Business Platform</p>
+      <div className="flex items-center justify-between px-4 h-16 border-b border-sidebar-border flex-shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-sidebar-primary flex items-center justify-center flex-shrink-0">
+            <Flame className="w-5 h-5 text-sidebar-primary-foreground" />
           </div>
+          {(!collapsed || isMobile) && (
+            <div className="overflow-hidden">
+              <h1 className="text-sm font-bold text-sidebar-accent-foreground tracking-tight">
+                HVAC Ops
+              </h1>
+              <p className="text-[10px] text-sidebar-muted">Business Platform</p>
+            </div>
+          )}
+        </div>
+        {isMobile && onClose && (
+          <button
+            onClick={onClose}
+            className="p-2 text-sidebar-muted hover:text-sidebar-accent-foreground transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
         )}
       </div>
 
@@ -73,27 +104,30 @@ const AppSidebar = () => {
             <NavLink
               key={item.to}
               to={item.to}
+              onClick={isMobile ? onClose : undefined}
               className={`sidebar-link ${isActive ? "active" : ""}`}
-              title={collapsed ? item.label : undefined}
+              title={collapsed && !isMobile ? item.label : undefined}
             >
               <item.icon className="w-[18px] h-[18px] flex-shrink-0" />
-              {!collapsed && <span>{item.label}</span>}
+              {(!collapsed || isMobile) && <span>{item.label}</span>}
             </NavLink>
           );
         })}
       </nav>
 
-      {/* Collapse toggle */}
-      <button
-        onClick={() => setCollapsed(!collapsed)}
-        className="flex items-center justify-center h-12 border-t border-sidebar-border text-sidebar-muted hover:text-sidebar-accent-foreground transition-colors"
-      >
-        <ChevronLeft
-          className={`w-4 h-4 transition-transform duration-300 ${
-            collapsed ? "rotate-180" : ""
-          }`}
-        />
-      </button>
+      {/* Collapse toggle - only on desktop */}
+      {!isMobile && (
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className="flex items-center justify-center h-12 border-t border-sidebar-border text-sidebar-muted hover:text-sidebar-accent-foreground transition-colors"
+        >
+          <ChevronLeft
+            className={`w-4 h-4 transition-transform duration-300 ${
+              collapsed ? "rotate-180" : ""
+            }`}
+          />
+        </button>
+      )}
     </aside>
   );
 };
