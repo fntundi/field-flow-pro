@@ -48,8 +48,9 @@ import {
   Banknote,
   Receipt,
 } from "lucide-react";
-import { invoicesApi, paymentsApi, InvoiceRecord, PaymentRecord } from "@/lib/api";
+import { invoicesApi, paymentsApi, stripePaymentsApi, InvoiceRecord, PaymentRecord } from "@/lib/api";
 import { toast } from "sonner";
+import { useSearchParams } from "react-router-dom";
 
 const invoiceStatusConfig: { [key: string]: { label: string; color: string; icon: React.ElementType } } = {
   draft: { label: "Draft", color: "bg-slate-500/20 text-slate-400 border-slate-500/30", icon: FileText },
