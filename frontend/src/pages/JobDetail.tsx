@@ -217,6 +217,40 @@ const JobDetail = () => {
     setEditingColumns(editingColumns.filter((_, i) => i !== index));
   };
 
+  // Click-to-call handler
+  const handleClickToCall = async (phoneNumber: string) => {
+    if (!job) return;
+    
+    setIsCallingCustomer(true);
+    try {
+      const result = await voipApi.initiateCall({
+        to_number: phoneNumber,
+        customer_id: job.customer_id || undefined,
+        job_id: job.id,
+        notes: `Call from job ${job.job_number}`,
+      });
+      
+      if (result.success) {
+        toast({
+          title: result.demo_mode ? "Demo Call" : "Call Initiated",
+          description: result.demo_mode 
+            ? "Simulated call to " + phoneNumber 
+            : "Connecting to " + phoneNumber,
+        });
+      } else {
+        throw new Error("Call failed");
+      }
+    } catch (error) {
+      toast({
+        title: "Call Failed",
+        description: "Could not initiate call. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCallingCustomer(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
