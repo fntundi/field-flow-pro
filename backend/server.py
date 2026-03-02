@@ -2725,10 +2725,11 @@ Keep response concise and actionable."""
 
     try:
         session_id = f"scheduling-{str(uuid.uuid4())[:8]}"
-        response = await get_gemini_response(prompt, session_id)
+        result = await get_ai_response_with_failover(prompt, session_id)
         return {
-            "suggestions": response,
-            "ai_model": "gemini-2.0-flash"
+            "suggestions": result["response"],
+            "ai_model": f"{result['provider']}/{result['model']}",
+            "failover_used": result.get("failover_used", False)
         }
     except Exception as e:
         logger.error(f"AI scheduling error: {e}")
@@ -2775,10 +2776,11 @@ Use professional HVAC terminology. Keep it customer-friendly."""
 
     try:
         session_id = f"summary-{str(uuid.uuid4())[:8]}"
-        response = await get_gemini_response(prompt, session_id)
+        result = await get_ai_response_with_failover(prompt, session_id)
         return {
-            "summary": response,
-            "ai_model": "gemini-2.0-flash"
+            "summary": result["response"],
+            "ai_model": f"{result['provider']}/{result['model']}",
+            "failover_used": result.get("failover_used", False)
         }
     except Exception as e:
         logger.error(f"AI summary error: {e}")
