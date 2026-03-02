@@ -2659,17 +2659,29 @@ async def get_jload_calculations_for_job(job_id: str):
 # Initialize Gemini client lazily
 _gemini_client = None
 
-def get_gemini_client():
-    global _gemini_client
-    if _gemini_client is None:
-        api_key = os.environ.get("EMERGENT_LLM_KEY")
-        if api_key:
-            try:
-                from emergentintegrations.llm.chat import LlmChat
-                _gemini_client = LlmChat(api_key=api_key)
-            except Exception as e:
-                logger.error(f"Failed to initialize Gemini client: {e}")
-    return _gemini_client
+def get_gemini_response(prompt: str, session_id: str = "default") -> str:
+    """Get response from Gemini using emergentintegrations"""
+    api_key = os.environ.get("EMERGENT_LLM_KEY")
+    if not api_key:
+        raise ValueError("EMERGENT_LLM_KEY not configured")
+    
+    from emergentintegrations.llm.chat import LlmChat, UserMessage
+    
+    # Create a new chat instance for each request with appropriate session
+    client = LlmChat(
+        api_key=api_key,
+        session_id=session_id,
+        system_message="You are a helpful HVAC service assistant for BreezeFlow, an HVAC business operations platform."
+    )
+    
+    # Configure for Gemini
+    client = client.with_model(provider="gemini", model="gemini-2.0-flash")
+    
+    # Create user message and send
+    user_msg = UserMessage(text=prompt)
+    response = client.send_message(user_msg)
+    
+    return response
 
 @api_router.post("/ai/scheduling-suggestions")
 async def get_scheduling_suggestions(data: dict):
@@ -2678,16 +2690,16 @@ async def get_scheduling_suggestions(data: dict):
     if not settings.ai_features_enabled:
         raise HTTPException(status_code=400, detail="AI features are disabled")
     
-    client = get_gemini_client()
-    if not client:
-        raise HTTPException(status_code=500, detail="AI service not available")
+    # Check if API key is configured
+    if not os.environ.get("EMERGENT_LLM_KEY"):
+        raise HTTPException(status_code=500, detail="AI service not configured")
     
     # Get context data
     jobs_today = data.get("jobs", [])
     technicians = data.get("technicians", [])
     new_job = data.get("new_job", {})
     
-    prompt = f"""You are an HVAC dispatch optimization assistant. Based on the following information, suggest the best scheduling options.
+    prompt = f"""Based on the following information, suggest the best scheduling options.
 
 Current Jobs Today:
 {jobs_today}
@@ -2710,17 +2722,15 @@ Provide 2-3 scheduling recommendations with:
 Keep response concise and actionable."""
 
     try:
-        response = await client.chat(
-            prompt=prompt,
-            model="gemini-2.0-flash"
-        )
+        session_id = f"scheduling-{str(uuid.uuid4())[:8]}"
+        response = get_gemini_response(prompt, session_id)
         return {
             "suggestions": response,
             "ai_model": "gemini-2.0-flash"
         }
     except Exception as e:
         logger.error(f"AI scheduling error: {e}")
-        raise HTTPException(status_code=500, detail="AI service error")
+        raise HTTPException(status_code=500, detail=f"AI service error: {str(e)}")
 
 @api_router.post("/ai/job-summary")
 async def generate_job_summary(data: dict):
@@ -2729,9 +2739,8 @@ async def generate_job_summary(data: dict):
     if not settings.ai_features_enabled:
         raise HTTPException(status_code=400, detail="AI features are disabled")
     
-    client = get_gemini_client()
-    if not client:
-        raise HTTPException(status_code=500, detail="AI service not available")
+    if not os.environ.get("EMERGENT_LLM_KEY"):
+        raise HTTPException(status_code=500, detail="AI service not configured")
     
     job_id = data.get("job_id")
     if job_id:
@@ -2740,7 +2749,7 @@ async def generate_job_summary(data: dict):
             job.pop("_id", None)
             data["job"] = job
     
-    prompt = f"""You are an HVAC service documentation assistant. Generate a professional job summary based on this information:
+    prompt = f"""Generate a professional job summary based on this information:
 
 Job Details:
 - Type: {data.get('job_type', 'Service')}
@@ -2763,17 +2772,15 @@ Generate a professional summary (2-3 paragraphs) that:
 Use professional HVAC terminology. Keep it customer-friendly."""
 
     try:
-        response = await client.chat(
-            prompt=prompt,
-            model="gemini-2.0-flash"
-        )
+        session_id = f"summary-{str(uuid.uuid4())[:8]}"
+        response = get_gemini_response(prompt, session_id)
         return {
             "summary": response,
             "ai_model": "gemini-2.0-flash"
         }
     except Exception as e:
         logger.error(f"AI summary error: {e}")
-        raise HTTPException(status_code=500, detail="AI service error")
+        raise HTTPException(status_code=500, detail=f"AI service error: {str(e)}")
 
 @api_router.post("/ai/predictive-maintenance")
 async def get_predictive_maintenance(data: dict):
