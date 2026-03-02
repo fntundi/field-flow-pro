@@ -42,9 +42,11 @@ import {
   Car,
   MapPinned,
   Loader2,
+  Smartphone,
 } from "lucide-react";
 import { jobsApi, techniciansApi, seedApi, timeTrackingApi, Job, Technician, GeoLocation, ShiftSession, JobTimeEntry } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import TechnicianMobileDashboard from "@/components/technician/TechnicianMobileDashboard";
 
 // Role-based dashboard views (Section 8.1)
 type UserRole = "owner" | "dispatcher" | "technician" | "sales";
