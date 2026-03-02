@@ -236,12 +236,7 @@ metadata:
   run_ui: false
 
 test_plan:
-  current_focus:
-    - "Technicians CRUD API with image upload"
-    - "Board Config API for Kanban columns"
-    - "Tasks API with move/reorder"
-    - "Jobs API"
-    - "Appointments API with customer confirmation"
+  current_focus: []
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
