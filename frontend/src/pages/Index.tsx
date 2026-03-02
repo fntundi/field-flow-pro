@@ -74,10 +74,81 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [aiEnabled, setAiEnabled] = useState(false);
   const [demoMode, setDemoMode] = useState(true);
+  
+  // Technician time tracking state
+  const [activeShift, setActiveShift] = useState<ShiftSession | null>(null);
+  const [activeJobEntry, setActiveJobEntry] = useState<JobTimeEntry | null>(null);
+  const [currentLocation, setCurrentLocation] = useState<GeoLocation | null>(null);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [clockLoading, setClockLoading] = useState(false);
+  const [selectedTechId, setSelectedTechId] = useState<string | null>(null);
+
+  // Get current location
+  const getCurrentLocation = useCallback((): Promise<GeoLocation | null> => {
+    return new Promise((resolve) => {
+      if (!navigator.geolocation) {
+        toast({
+          title: "Location Not Available",
+          description: "Geolocation is not supported by your browser.",
+          variant: "destructive",
+        });
+        resolve(null);
+        return;
+      }
+
+      setLocationLoading(true);
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const loc: GeoLocation = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+          };
+          setCurrentLocation(loc);
+          setLocationLoading(false);
+          resolve(loc);
+        },
+        (error) => {
+          console.error("Location error:", error);
+          setLocationLoading(false);
+          toast({
+            title: "Location Error",
+            description: "Could not get your current location. Continuing without location data.",
+          });
+          resolve(null);
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+      );
+    });
+  }, [toast]);
+
+  // Fetch time tracking status for technician
+  const fetchTimeTrackingStatus = useCallback(async (techId: string) => {
+    try {
+      const [shiftResult, jobResult] = await Promise.all([
+        timeTrackingApi.getActiveShift(techId),
+        timeTrackingApi.getActiveJobEntry(techId),
+      ]);
+      setActiveShift(shiftResult.active ? shiftResult.session : null);
+      setActiveJobEntry(jobResult.active ? jobResult.entry : null);
+    } catch (error) {
+      console.error("Error fetching time tracking status:", error);
+    }
+  }, []);
 
   useEffect(() => {
     fetchData();
   }, []);
+
+  // When role is technician, set up tech-specific state
+  useEffect(() => {
+    if (role === "technician" && technicians.length > 0) {
+      // For demo, use the first available technician
+      const demoTech = technicians[0];
+      setSelectedTechId(demoTech.id);
+      fetchTimeTrackingStatus(demoTech.id);
+    }
+  }, [role, technicians, fetchTimeTrackingStatus]);
 
   const fetchData = async () => {
     try {
@@ -92,6 +163,127 @@ const Dashboard = () => {
       console.error("Error fetching dashboard data:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Clock-in/out handlers
+  const handleStartShift = async () => {
+    if (!selectedTechId) return;
+    setClockLoading(true);
+    try {
+      const location = await getCurrentLocation();
+      const result = await timeTrackingApi.startShift(selectedTechId, location || undefined);
+      toast({
+        title: "Shift Started",
+        description: `You are now clocked in. ${result.location_captured ? "Location recorded." : ""}`,
+      });
+      await fetchTimeTrackingStatus(selectedTechId);
+      await fetchData(); // Refresh technician status
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to start shift",
+        variant: "destructive",
+      });
+    } finally {
+      setClockLoading(false);
+    }
+  };
+
+  const handleEndShift = async () => {
+    if (!selectedTechId) return;
+    setClockLoading(true);
+    try {
+      const location = await getCurrentLocation();
+      const result = await timeTrackingApi.endShift(selectedTechId, location || undefined);
+      toast({
+        title: "Shift Ended",
+        description: `Total shift: ${result.total_shift_hours} hours. Jobs completed: ${result.jobs_completed}`,
+      });
+      setActiveShift(null);
+      setActiveJobEntry(null);
+      await fetchData();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to end shift",
+        variant: "destructive",
+      });
+    } finally {
+      setClockLoading(false);
+    }
+  };
+
+  const handleDispatchToJob = async (jobId: string) => {
+    if (!selectedTechId) return;
+    setClockLoading(true);
+    try {
+      const location = await getCurrentLocation();
+      const result = await timeTrackingApi.dispatchToJob(selectedTechId, jobId, location || undefined);
+      toast({
+        title: "Dispatched",
+        description: `En route to ${result.job_number}. ${result.estimated_travel_minutes ? `ETA: ${result.estimated_travel_minutes} min` : ""}`,
+      });
+      await fetchTimeTrackingStatus(selectedTechId);
+      await fetchData();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to dispatch",
+        variant: "destructive",
+      });
+    } finally {
+      setClockLoading(false);
+    }
+  };
+
+  const handleArriveAtJob = async () => {
+    if (!activeJobEntry) return;
+    setClockLoading(true);
+    try {
+      const location = await getCurrentLocation();
+      const result = await timeTrackingApi.arriveAtJob(activeJobEntry.id, location || undefined);
+      const variance = result.travel_variance_minutes;
+      const varianceText = variance !== null 
+        ? (variance > 0 ? `(+${variance.toFixed(1)} min over estimate)` : `(${variance.toFixed(1)} min under estimate)`)
+        : "";
+      toast({
+        title: "Arrived On Site",
+        description: `Travel time: ${result.actual_travel_minutes} min ${varianceText}`,
+      });
+      await fetchTimeTrackingStatus(selectedTechId!);
+      await fetchData();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to record arrival",
+        variant: "destructive",
+      });
+    } finally {
+      setClockLoading(false);
+    }
+  };
+
+  const handleCompleteJob = async () => {
+    if (!activeJobEntry) return;
+    setClockLoading(true);
+    try {
+      const location = await getCurrentLocation();
+      const result = await timeTrackingApi.completeJob(activeJobEntry.id, location || undefined);
+      toast({
+        title: "Job Completed",
+        description: `Job time: ${result.actual_job_hours} hours. Great work!`,
+      });
+      await fetchTimeTrackingStatus(selectedTechId!);
+      await fetchData();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to complete job",
+        variant: "destructive",
+      });
+    } finally {
+      setClockLoading(false);
     }
   };
 
