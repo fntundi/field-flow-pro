@@ -517,6 +517,76 @@ export default function Settings() {
               </CardContent>
             </Card>
 
+            {/* VoIP / Phone.com Integration */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Phone className="w-5 h-5" />
+                  VoIP Integration (Phone.com)
+                </CardTitle>
+                <CardDescription>
+                  Enable click-to-call, call logging, and SMS messaging
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="p-3 bg-muted/50 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-yellow-500" />
+                      <span className="text-sm font-medium">Demo Mode Active</span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    VoIP is running in demo mode. To enable real calling:
+                  </p>
+                  <ol className="text-xs text-muted-foreground mt-2 list-decimal list-inside space-y-1">
+                    <li>Sign up at <a href="https://www.phone.com" target="_blank" rel="noopener" className="text-primary hover:underline">phone.com</a></li>
+                    <li>Get your API key from the developer portal</li>
+                    <li>Set <code className="bg-muted px-1 rounded">PHONE_COM_API_KEY</code> and <code className="bg-muted px-1 rounded">PHONE_COM_ACCOUNT_ID</code> environment variables</li>
+                  </ol>
+                </div>
+                
+                <div className="flex items-center justify-between pt-2">
+                  <div>
+                    <Label>Call Recording</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Automatically record calls for quality assurance
+                    </p>
+                  </div>
+                  <Switch
+                    checked={settings?.voip_call_recording ?? true}
+                    onCheckedChange={(checked) => handleToggle("voip_call_recording", checked)}
+                  />
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Auto-Link Calls to Customers</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Match incoming calls to customers by phone number
+                    </p>
+                  </div>
+                  <Switch
+                    checked={settings?.voip_auto_link_customers ?? true}
+                    onCheckedChange={(checked) => handleToggle("voip_auto_link_customers", checked)}
+                  />
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>SMS Notifications</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Enable sending SMS messages to customers
+                    </p>
+                  </div>
+                  <Switch
+                    checked={settings?.voip_sms_enabled ?? true}
+                    onCheckedChange={(checked) => handleToggle("voip_sms_enabled", checked)}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Push Notifications */}
             <Card>
               <CardHeader>
