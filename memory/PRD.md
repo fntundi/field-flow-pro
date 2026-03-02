@@ -60,7 +60,7 @@ Build a modern HVAC field service management system per RFC-002 with comprehensi
 - [x] **Transfer Status** - Pending, In Transit, Received, Cancelled
 - [x] New "Warehouse" page in sidebar navigation
 
-### PWA & Integrations (RFC-002 Section 4.9+) - NEW
+### PWA & Integrations (RFC-002 Section 4.9+) - COMPLETE
 - [x] **Backend Router Fix** - Resolved P0 404 error for all new endpoints
 - [x] **Push Notifications API** - VAPID key generation, subscription management
 - [x] **QuickBooks Integration API** - Status, connect, disconnect, sync endpoints
@@ -71,6 +71,15 @@ Build a modern HVAC field service management system per RFC-002 with comprehensi
   - QuickBooks: Enable, connect, sync controls
   - Push Notifications: Enable, trigger configuration
 - [x] **Inventory Cleanup** - Removed obsolete Inventory.tsx, consolidated to single route
+- [x] **PWA Frontend Integration** - Service Worker registration on app startup
+- [x] **PWA Icons** - Generated 8 icon sizes (72x72 to 512x512) for manifest
+- [x] **Offline Storage** - IndexedDB-based offline data caching and sync
+- [x] **PWA Install Banner** - Dismissable banner prompting users to install the app
+- [x] **Your Device Section** - Settings > Integrations shows:
+  - Online/offline status indicator
+  - PWA installation status and button
+  - Push notification subscription toggle for current device
+  - Browser permission status with help text
 
 ### Install Project Billing (RFC-002 Section 4.5.3)
 - [x] **Milestone Templates** - 4 predefined configurable templates
