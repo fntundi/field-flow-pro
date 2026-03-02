@@ -897,6 +897,416 @@ export const jloadApi = {
     }>(`/jload/by-job/${jobId}`),
 };
 
+// ==================== GOOGLE MAPS ROUTING API ====================
+
+export interface RouteCalculation {
+  id: string;
+  origin_address: string;
+  origin_lat?: number;
+  origin_lng?: number;
+  destination_address: string;
+  destination_lat?: number;
+  destination_lng?: number;
+  distance_meters: number;
+  distance_miles: number;
+  duration_seconds: number;
+  duration_minutes: number;
+  duration_in_traffic_seconds?: number;
+  duration_in_traffic_minutes?: number;
+  polyline?: string;
+  summary?: string;
+  warnings: string[];
+  api_status: string;
+}
+
+export const mapsApi = {
+  getConfig: () => fetchApi<{ configured: boolean; message: string }>('/maps/config'),
+  
+  calculateRoute: (origin: string, destination: string, departureTime?: string) =>
+    fetchApi<RouteCalculation>('/maps/route', {
+      method: 'POST',
+      body: JSON.stringify({ origin, destination, departure_time: departureTime }),
+    }),
+  
+  geocode: (address: string) =>
+    fetchApi<{ address: string; lat: number; lng: number } | { error: string }>(
+      `/maps/geocode?address=${encodeURIComponent(address)}`
+    ),
+};
+
+// ==================== MAINTENANCE AGREEMENTS API ====================
+
+export interface MaintenanceTemplate {
+  id: string;
+  name: string;
+  description?: string;
+  frequency: 'monthly' | 'quarterly' | 'semi_annual' | 'annual';
+  visits_per_year: number;
+  base_price: number;
+  included_services: string[];
+  parts_discount_percent: number;
+  labor_discount_percent: number;
+  priority_response: boolean;
+}
+
+export interface MaintenanceAgreement {
+  id: string;
+  agreement_number: string;
+  customer_name: string;
+  customer_email?: string;
+  customer_phone?: string;
+  service_address: string;
+  template_id?: string;
+  template_name?: string;
+  frequency: 'monthly' | 'quarterly' | 'semi_annual' | 'annual';
+  equipment: Array<{ type: string; model: string; serial_number?: string; location?: string }>;
+  start_date: string;
+  end_date: string;
+  next_service_date?: string;
+  last_service_date?: string;
+  annual_price: number;
+  payment_frequency: 'monthly' | 'quarterly' | 'annual';
+  status: 'active' | 'pending' | 'expired' | 'cancelled';
+  auto_renew: boolean;
+  generated_job_ids: string[];
+  notes?: string;
+  created_at: string;
+}
+
+export const maintenanceApi = {
+  getTemplates: () => fetchApi<MaintenanceTemplate[]>('/maintenance/templates'),
+  
+  createTemplate: (data: Partial<MaintenanceTemplate>) =>
+    fetchApi<MaintenanceTemplate>('/maintenance/templates', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  
+  getAgreements: (params?: { status?: string; customer_name?: string }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.status) searchParams.append('status', params.status);
+    if (params?.customer_name) searchParams.append('customer_name', params.customer_name);
+    const query = searchParams.toString();
+    return fetchApi<MaintenanceAgreement[]>(`/maintenance/agreements${query ? `?${query}` : ''}`);
+  },
+  
+  getAgreement: (id: string) => fetchApi<MaintenanceAgreement>(`/maintenance/agreements/${id}`),
+  
+  createAgreement: (data: {
+    customer_name: string;
+    customer_email?: string;
+    customer_phone?: string;
+    service_address: string;
+    template_id?: string;
+    frequency?: string;
+    equipment?: any[];
+    start_date: string;
+    end_date?: string;
+    annual_price?: number;
+    payment_frequency?: string;
+    auto_renew?: boolean;
+    notes?: string;
+  }) =>
+    fetchApi<MaintenanceAgreement>('/maintenance/agreements', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  
+  updateAgreement: (id: string, data: Partial<MaintenanceAgreement>) =>
+    fetchApi<MaintenanceAgreement>(`/maintenance/agreements/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  
+  generateJobs: (agreementId: string) =>
+    fetchApi<{ message: string; job_ids: string[] }>(`/maintenance/agreements/${agreementId}/generate-jobs`, {
+      method: 'POST',
+    }),
+  
+  getDueRenewals: (days: number = 30) =>
+    fetchApi<MaintenanceAgreement[]>(`/maintenance/due-renewals?days=${days}`),
+};
+
+// ==================== INSTALL PROJECTS / GANTT API ====================
+
+export interface ProjectPhase {
+  id: string;
+  name: string;
+  description?: string;
+  start_date: string;
+  end_date: string;
+  duration_days: number;
+  depends_on: string[];
+  assigned_technician_ids: string[];
+  status: 'not_started' | 'in_progress' | 'completed' | 'blocked';
+  percent_complete: number;
+  milestones: Array<{ name: string; date: string; completed: boolean }>;
+  task_ids: string[];
+  color?: string;
+  notes?: string;
+}
+
+export interface InstallProject {
+  id: string;
+  project_number: string;
+  job_id: string;
+  name: string;
+  description?: string;
+  customer_name: string;
+  site_address: string;
+  planned_start_date: string;
+  planned_end_date: string;
+  actual_start_date?: string;
+  actual_end_date?: string;
+  phases: ProjectPhase[];
+  assigned_technician_ids: string[];
+  estimated_hours: number;
+  actual_hours: number;
+  estimated_cost: number;
+  actual_cost: number;
+  status: 'planning' | 'scheduled' | 'in_progress' | 'completed' | 'on_hold' | 'cancelled';
+  percent_complete: number;
+  billing_milestones: Array<{ name: string; percent: number; amount: number; invoiced: boolean }>;
+  notes?: string;
+}
+
+export interface GanttData {
+  project: { id: string; name: string; start: string; end: string; progress: number };
+  phases: Array<{
+    id: string;
+    name: string;
+    start: string;
+    end: string;
+    duration: number;
+    progress: number;
+    dependencies: string[];
+    resources: string[];
+    color?: string;
+    status: string;
+  }>;
+  resources: Array<{ id: string; name: string }>;
+}
+
+export const projectsApi = {
+  getAll: (params?: { status?: string; job_id?: string }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.status) searchParams.append('status', params.status);
+    if (params?.job_id) searchParams.append('job_id', params.job_id);
+    const query = searchParams.toString();
+    return fetchApi<InstallProject[]>(`/projects${query ? `?${query}` : ''}`);
+  },
+  
+  getById: (id: string) => fetchApi<InstallProject>(`/projects/${id}`),
+  
+  create: (data: {
+    job_id: string;
+    name: string;
+    description?: string;
+    customer_name: string;
+    site_address: string;
+    planned_start_date: string;
+    planned_end_date: string;
+    estimated_hours?: number;
+    estimated_cost?: number;
+    notes?: string;
+  }) =>
+    fetchApi<InstallProject>('/projects', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  
+  update: (id: string, data: Partial<InstallProject>) =>
+    fetchApi<InstallProject>(`/projects/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  
+  addPhase: (projectId: string, data: {
+    name: string;
+    description?: string;
+    start_date: string;
+    end_date: string;
+    depends_on?: string[];
+    assigned_technician_ids?: string[];
+    color?: string;
+  }) =>
+    fetchApi<ProjectPhase>(`/projects/${projectId}/phases`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  
+  updatePhase: (projectId: string, phaseId: string, data: Partial<ProjectPhase>) =>
+    fetchApi<{ message: string }>(`/projects/${projectId}/phases/${phaseId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  
+  getGanttData: (projectId: string) => fetchApi<GanttData>(`/projects/gantt-data/${projectId}`),
+};
+
+// ==================== CUSTOMER PORTAL API ====================
+
+export interface CustomerAccount {
+  id: string;
+  email: string;
+  name: string;
+  phone?: string;
+  addresses: Array<{ address: string; is_primary: boolean }>;
+  email_verified: boolean;
+  notification_preferences: { email_reminders: boolean; sms_reminders: boolean; marketing: boolean };
+  status: 'active' | 'inactive' | 'suspended';
+  last_login?: string;
+}
+
+export interface ServiceRequest {
+  id: string;
+  request_number: string;
+  customer_id: string;
+  customer_name: string;
+  customer_email: string;
+  service_type: 'repair' | 'maintenance' | 'installation' | 'inspection' | 'other';
+  description: string;
+  urgency: 'low' | 'normal' | 'high' | 'emergency';
+  preferred_dates: string[];
+  preferred_time_of_day: 'morning' | 'afternoon' | 'evening' | 'anytime';
+  service_address: string;
+  access_instructions?: string;
+  status: 'pending' | 'confirmed' | 'scheduled' | 'completed' | 'cancelled';
+  assigned_job_id?: string;
+  notes?: string;
+  created_at: string;
+}
+
+export const customerPortalApi = {
+  register: (data: { email: string; password?: string; name: string; phone?: string; address?: string }) =>
+    fetchApi<{ message: string; customer_id: string; verification_token?: string }>('/customer/register', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  
+  login: (email: string, password: string) =>
+    fetchApi<{ message: string; token: string; customer: { id: string; name: string; email: string } }>(
+      '/customer/login',
+      { method: 'POST', body: JSON.stringify({ email, password }) }
+    ),
+  
+  requestMagicLink: (email: string) =>
+    fetchApi<{ message: string; token?: string }>('/customer/magic-link', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
+  
+  verifyMagicLink: (token: string) =>
+    fetchApi<{ message: string; token: string; customer: { id: string; name: string; email: string } }>(
+      `/customer/verify-magic/${token}`,
+      { method: 'POST' }
+    ),
+  
+  getProfile: (customerId: string) => fetchApi<CustomerAccount>(`/customer/profile/${customerId}`),
+  
+  updateProfile: (customerId: string, data: Partial<CustomerAccount>) =>
+    fetchApi<{ message: string }>(`/customer/profile/${customerId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  
+  createServiceRequest: (customerId: string, data: {
+    service_type: string;
+    description: string;
+    urgency?: string;
+    preferred_dates?: string[];
+    preferred_time_of_day?: string;
+    service_address: string;
+    access_instructions?: string;
+  }) =>
+    fetchApi<{ message: string; request_number: string; request_id: string }>(
+      `/customer/service-request?customer_id=${customerId}`,
+      { method: 'POST', body: JSON.stringify(data) }
+    ),
+  
+  getServiceRequests: (customerId: string) =>
+    fetchApi<ServiceRequest[]>(`/customer/${customerId}/service-requests`),
+  
+  getJobs: (customerId: string) =>
+    fetchApi<any[]>(`/customer/${customerId}/jobs`),
+  
+  getAgreements: (customerId: string) =>
+    fetchApi<MaintenanceAgreement[]>(`/customer/${customerId}/agreements`),
+};
+
+// Admin service request management
+export const serviceRequestsApi = {
+  getAll: (status?: string) => {
+    const query = status ? `?status=${status}` : '';
+    return fetchApi<ServiceRequest[]>(`/service-requests${query}`);
+  },
+  
+  updateStatus: (requestId: string, status: string, jobId?: string) =>
+    fetchApi<{ message: string }>(
+      `/service-requests/${requestId}/status?status=${status}${jobId ? `&job_id=${jobId}` : ''}`,
+      { method: 'PUT' }
+    ),
+};
+
+// ==================== OFFLINE SYNC API ====================
+
+export interface SyncChange {
+  operation: 'create' | 'update' | 'delete';
+  entity_type: string;
+  entity_id?: string;
+  payload?: any;
+  client_timestamp: string;
+}
+
+export interface SyncResult {
+  synced: Array<{ entity_type: string; entity_id?: string; message?: string }>;
+  conflicts: Array<{
+    entity_type: string;
+    entity_id?: string;
+    conflict_type: string;
+    server_data?: any;
+    queue_id: string;
+  }>;
+  failed: Array<{ entity_type: string; error: string }>;
+}
+
+export interface SyncStatus {
+  client_id: string;
+  pending_count: number;
+  synced_count: number;
+  conflict_count: number;
+  failed_count: number;
+  last_sync?: string;
+  conflicts: any[];
+}
+
+export const syncApi = {
+  syncBatch: (clientId: string, userId: string | null, userType: string, changes: SyncChange[]) =>
+    fetchApi<SyncResult>('/sync/batch', {
+      method: 'POST',
+      body: JSON.stringify({
+        client_id: clientId,
+        user_id: userId,
+        user_type: userType,
+        changes,
+      }),
+    }),
+  
+  resolveConflict: (queueId: string, resolution: 'client_wins' | 'server_wins' | 'merged' | 'manual', mergedData?: any) =>
+    fetchApi<{ message: string }>('/sync/resolve', {
+      method: 'POST',
+      body: JSON.stringify({
+        queue_id: queueId,
+        resolution,
+        merged_data: mergedData,
+      }),
+    }),
+  
+  getStatus: (clientId: string) => fetchApi<SyncStatus>(`/sync/status/${clientId}`),
+  
+  getPending: (clientId: string) => fetchApi<any[]>(`/sync/pending/${clientId}`),
+};
+
 // ==================== SEED API ====================
 
 export const seedApi = {
