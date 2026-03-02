@@ -12,29 +12,35 @@ import {
   Phone,
   Settings,
   ChevronLeft,
-  Flame,
+  Wind,
   UserCircle,
   Calculator,
   Shield,
   DollarSign,
   Wrench,
   X,
+  PhoneIncoming,
+  Building2,
+  FolderKanban,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
+  { to: "/call-intake", icon: PhoneIncoming, label: "Call Intake" },
   { to: "/jobs", icon: Briefcase, label: "Jobs" },
+  { to: "/projects", icon: FolderKanban, label: "Projects" },
   { to: "/sales", icon: DollarSign, label: "Sales" },
   { to: "/estimates", icon: Calculator, label: "Estimates" },
   { to: "/dispatch", icon: MapPin, label: "Dispatch" },
   { to: "/leads", icon: Phone, label: "Leads & PCBs" },
   { to: "/customers", icon: UserCircle, label: "Customers" },
+  { to: "/sites", icon: Building2, label: "Sites" },
   { to: "/technicians", icon: Users, label: "Technicians" },
   { to: "/schedule", icon: CalendarDays, label: "Schedule" },
   { to: "/maintenance", icon: Wrench, label: "Maintenance" },
-  { to: "/checklists", icon: ClipboardCheck, label: "Checklists" },
   { to: "/agreements", icon: Shield, label: "Agreements" },
+  { to: "/checklists", icon: ClipboardCheck, label: "Checklists" },
   { to: "/invoices", icon: FileText, label: "Invoices" },
   { to: "/inventory", icon: Package, label: "Inventory" },
   { to: "/analytics", icon: BarChart3, label: "Analytics" },
@@ -75,14 +81,14 @@ const AppSidebar = ({ isOpen = true, isMobile = false, onClose }: AppSidebarProp
       <div className="flex items-center justify-between px-4 h-16 border-b border-sidebar-border flex-shrink-0">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-sidebar-primary flex items-center justify-center flex-shrink-0">
-            <Flame className="w-5 h-5 text-sidebar-primary-foreground" />
+            <Wind className="w-5 h-5 text-sidebar-primary-foreground" />
           </div>
           {(!collapsed || isMobile) && (
             <div className="overflow-hidden">
               <h1 className="text-sm font-bold text-sidebar-accent-foreground tracking-tight">
-                HVAC Ops
+                BreezeFlow
               </h1>
-              <p className="text-[10px] text-sidebar-muted">Business Platform</p>
+              <p className="text-[10px] text-sidebar-muted">HVAC Operations</p>
             </div>
           )}
         </div>
@@ -99,7 +105,8 @@ const AppSidebar = ({ isOpen = true, isMobile = false, onClose }: AppSidebarProp
       {/* Navigation */}
       <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto">
         {navItems.map((item) => {
-          const isActive = location.pathname === item.to;
+          const isActive = location.pathname === item.to || 
+            (item.to !== "/" && location.pathname.startsWith(item.to));
           return (
             <NavLink
               key={item.to}
