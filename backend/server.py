@@ -7586,11 +7586,12 @@ async def seed_database():
     for i, job_data in enumerate(jobs_data):
         # Link to customer_id
         cust_id = customer_ids.get(job_data.customer_name)
+        job_dict = job_data.dict()
+        job_dict["customer_id"] = cust_id  # Override with actual customer ID
         job = Job(
             job_number=f"JOB-{1001 + i}",
             status=job_statuses[i % len(job_statuses)],
-            customer_id=cust_id,
-            **job_data.dict()
+            **job_dict
         )
         await db.jobs.insert_one(job.dict())
         job_ids.append(job.id)
