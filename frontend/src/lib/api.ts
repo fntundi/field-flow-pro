@@ -2292,6 +2292,110 @@ export const customerEquipmentApi = {
     }),
 };
 
+// ==================== SITES API ====================
+
+export interface SiteContact {
+  name: string;
+  phone?: string;
+  email?: string;
+  role?: string;
+  is_primary: boolean;
+  notes?: string;
+}
+
+export interface Site {
+  id: string;
+  customer_id: string;
+  customer_name?: string;
+  name: string;
+  site_type: 'residential' | 'commercial' | 'industrial' | 'multi-family';
+  address: string;
+  city?: string;
+  state?: string;
+  zip_code?: string;
+  access_instructions?: string;
+  gate_code?: string;
+  key_location?: string;
+  parking_notes?: string;
+  building_hours?: string;
+  contacts: SiteContact[];
+  equipment_ids: string[];
+  total_jobs: number;
+  last_service_date?: string;
+  latitude?: number;
+  longitude?: number;
+  is_active: boolean;
+  requires_appointment: boolean;
+  has_pets: boolean;
+  pet_notes?: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SiteCreate {
+  customer_id: string;
+  name: string;
+  site_type?: 'residential' | 'commercial' | 'industrial' | 'multi-family';
+  address: string;
+  city?: string;
+  state?: string;
+  zip_code?: string;
+  access_instructions?: string;
+  gate_code?: string;
+  key_location?: string;
+  parking_notes?: string;
+  building_hours?: string;
+  contacts?: SiteContact[];
+  requires_appointment?: boolean;
+  has_pets?: boolean;
+  pet_notes?: string;
+  notes?: string;
+}
+
+export const sitesApi = {
+  getAll: (params?: { customer_id?: string; site_type?: string; search?: string }) => {
+    const query = params ? new URLSearchParams(
+      Object.entries(params).filter(([_, v]) => v !== undefined) as [string, string][]
+    ).toString() : '';
+    return fetchApi<Site[]>(`/sites${query ? `?${query}` : ''}`);
+  },
+  
+  getById: (id: string) => fetchApi<Site>(`/sites/${id}`),
+  
+  getJobs: (id: string) => fetchApi<Job[]>(`/sites/${id}/jobs`),
+  
+  getEquipment: (id: string) => fetchApi<CustomerEquipmentRecord[]>(`/sites/${id}/equipment`),
+  
+  create: (data: SiteCreate) =>
+    fetchApi<Site>('/sites', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  
+  update: (id: string, data: Partial<Site>) =>
+    fetchApi<Site>(`/sites/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  
+  delete: (id: string) =>
+    fetchApi<{ message: string }>(`/sites/${id}`, {
+      method: 'DELETE',
+    }),
+  
+  linkEquipment: (siteId: string, equipmentId: string) =>
+    fetchApi<{ message: string }>(`/sites/${siteId}/equipment/${equipmentId}`, {
+      method: 'POST',
+    }),
+  
+  migrateFromJobs: () =>
+    fetchApi<{ message: string; sites_created: number; total_unique_addresses: number }>(
+      '/sites/migrate-from-jobs',
+      { method: 'POST' }
+    ),
+};
+
 // ==================== AUTHENTICATION API ====================
 
 export interface AuthUser {
