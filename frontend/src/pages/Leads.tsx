@@ -59,13 +59,13 @@ const leadStatusConfig = {
   lost: { label: "Lost", color: "bg-red-500/20 text-red-400 border-red-500/30" },
 } as Record<string, { label: string; color: string }>;
 
-const pcbStatusConfig: Record<string, { label: string; color: string }> = {
+const pcbStatusConfig = {
   created: { label: "Created", color: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
   assigned: { label: "Assigned", color: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" },
   follow_up: { label: "Follow Up", color: "bg-purple-500/20 text-purple-400 border-purple-500/30" },
   converted: { label: "Converted", color: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" },
   closed: { label: "Closed", color: "bg-slate-500/20 text-slate-400 border-slate-500/30" },
-};
+} as Record<string, { label: string; color: string }>;
 
 const priorityConfig: Record<string, { label: string; color: string }> = {
   low: { label: "Low", color: "bg-slate-500/20 text-slate-400" },
