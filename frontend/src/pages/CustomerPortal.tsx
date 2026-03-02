@@ -600,6 +600,20 @@ const CustomerPortal = () => {
                                 )}
                               </div>
                             </div>
+                            {(job.status === "scheduled" || job.status === "dispatched") && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedJobForReschedule(job);
+                                  setRescheduleDialogOpen(true);
+                                }}
+                                data-testid={`reschedule-job-${job.id}`}
+                              >
+                                <CalendarClock className="w-4 h-4 mr-1" />
+                                Reschedule
+                              </Button>
+                            )}
                           </div>
                         ))}
                       </div>
