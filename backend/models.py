@@ -735,7 +735,7 @@ class ManualJLoadCalculation(BaseModel):
     lighting_load_btuh: float = 0
     
     # Duct system
-    duct_location: Literal["conditioned", "unconditioned_attic", "unconditioned_basement", "crawlspace"]
+    duct_location: Literal["conditioned", "unconditioned_attic", "unconditioned_basement", "crawlspace"] = "unconditioned_attic"
     duct_insulation_r: float = 6.0
     duct_leakage_percent: float = 10.0
     
