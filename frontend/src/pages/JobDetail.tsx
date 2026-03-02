@@ -56,6 +56,9 @@ const JobDetail = () => {
   // Board Config Dialog
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [editingColumns, setEditingColumns] = useState<StatusColumn[]>([]);
+  
+  // Click-to-call state
+  const [isCallingCustomer, setIsCallingCustomer] = useState(false);
 
   useEffect(() => {
     if (id) {
