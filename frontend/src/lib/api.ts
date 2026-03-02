@@ -2299,19 +2299,28 @@ export interface ReportSummary {
   technicians: { total: number };
 }
 
+export interface ReportQueryParams {
+  data_source: string;
+  columns: string[];
+  filters?: { field: string; operator: string; value: string }[];
+  group_by?: string;
+  sort_by?: string;
+  sort_order?: string;
+  date_range?: { start: string; end: string };
+}
+
+export interface ReportQueryResult {
+  data_source: string;
+  results: any[];
+  aggregations?: Record<string, number>;
+  total_count: number;
+}
+
 export const reportsApi = {
   getSummary: () => fetchApi<ReportSummary>('/reports/summary'),
   
-  query: (data: {
-    entity: string;
-    filters?: Record<string, any>;
-    group_by?: string;
-    date_range?: { start?: string; end?: string; field?: string };
-    aggregations?: string[];
-    sum_field?: string;
-    avg_field?: string;
-  }) =>
-    fetchApi<{ entity: string; filters: any; group_by?: string; results: any[] }>('/reports/query', {
+  query: (data: ReportQueryParams) =>
+    fetchApi<ReportQueryResult>('/reports/query', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
