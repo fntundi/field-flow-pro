@@ -36,6 +36,7 @@ const navItems = [
   { to: "/call-intake", icon: PhoneIncoming, label: "Call Intake" },
   { to: "/jobs", icon: Briefcase, label: "Jobs" },
   { to: "/projects", icon: FolderKanban, label: "Projects" },
+  { to: "/project-billing", icon: DollarSign, label: "Project Billing" },
   { to: "/sales", icon: DollarSign, label: "Sales" },
   { to: "/estimates", icon: Calculator, label: "Estimates" },
   { to: "/dispatch", icon: MapPin, label: "Dispatch" },
