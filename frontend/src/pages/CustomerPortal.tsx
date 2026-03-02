@@ -290,6 +290,53 @@ const CustomerPortal = () => {
     }
   };
 
+  const handleRescheduleRequest = async () => {
+    if (!customer || !selectedJobForReschedule || !rescheduleForm.requested_date) {
+      toast({ title: "Missing Fields", description: "Please select a new date", variant: "destructive" });
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      const result = await rescheduleRequestsApi.create({
+        job_id: selectedJobForReschedule.id,
+        customer_id: customer.id,
+        customer_email: customer.email,
+        requested_date: rescheduleForm.requested_date,
+        requested_time_preference: rescheduleForm.requested_time_preference,
+        reason: rescheduleForm.reason,
+      });
+      
+      toast({
+        title: "Reschedule Request Submitted",
+        description: `Your request ${result.request_number} has been submitted and is pending approval.`,
+      });
+      
+      setRescheduleDialogOpen(false);
+      setSelectedJobForReschedule(null);
+      setRescheduleForm({ requested_date: "", requested_time_preference: "anytime", reason: "" });
+      
+      // Refresh data
+      const reschedules = await rescheduleRequestsApi.getByCustomer(customer.id);
+      setRescheduleRequests(reschedules);
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePayInvoice = async (invoice: any) => {
+    setLoading(true);
+    try {
+      const session = await stripePaymentsApi.createCheckoutSession(invoice.id);
+      window.location.href = session.checkout_url;
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message || "Failed to initiate payment", variant: "destructive" });
+      setLoading(false);
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "completed": return <Badge className="bg-green-100 text-green-700">Completed</Badge>;
