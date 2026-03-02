@@ -13,7 +13,7 @@ from datetime import datetime
 from typing import Dict, Any, Optional
 
 # Configuration
-BASE_URL = "https://hvac-dispatch-hub.preview.emergentagent.com/api"
+BASE_URL = "https://hvac-business-hub.preview.emergentagent.com/api"
 HEADERS = {"Content-Type": "application/json"}
 
 class APITester:

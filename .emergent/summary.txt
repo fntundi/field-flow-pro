@@ -17,203 +17,187 @@ PRODUCT REQUIREMENTS (From RFC-002):
 **User's preferred language**: English
 
 **what currently exists?**
-The BreezeFlow application has a React frontend and FastAPI backend. The agent has just completed a significant update based on the user's RFC-002.
-- **Backend**: The data models () and API endpoints () have been expanded to support Leads, PCBs (Potential Call Backs), Proposals, Job Types, and more. A configurable setting for the Google Maps API key has been implemented. Backend stubs and dependencies for JWT authentication, AI features (Gemini), and data import wizards have been added.
-- **Frontend**: A comprehensive Leads page with metrics, filtering, and data display is fully functional. New pages for Proposals, Settings (including the Google Maps toggle), Invoices, and Vendors have been created and routed in . The API client () has been updated with functions for the new backend endpoints.
+The BreezeFlow application has been significantly built out. A full JWT and Google OAuth authentication system is in place with protected routes. Key features from RFC-002 have been implemented, including:
+- **Backend**: Expanded data models () and API endpoints () for most features including Leads, Proposals, Job Types, Invoices, Vendors, AI (Gemini), Data Imports, Project Billing, Customer Reschedule Requests, and Stripe payments. WebSocket support for real-time chat has been partially added.
+- **Frontend**: Functional pages for Leads, Invoices (with Stripe payments), Vendors, Proposals, Settings, a full-featured Customer Portal (with reschedule requests), a Scheduling Board, a Report Builder, a Project Billing manager, and an Import Wizard. A global  manages user state.
 
 **Last working item**:
-    - Last item agent was working: The agent was in the middle of a large batch of feature implementations based on user request. It had just added the backend infrastructure for JWT authentication, AI (Gemini), and Import Wizards. It then created the frontend pages for Invoices and Vendors, and then added the auth API functions to the frontend API client (). The immediate next step was to create the frontend  page and associated auth context/logic.
+    - Last item agent was working: The agent started implementing the WebSocket-based Job Chat system. It added the required data models to , added  to the FastAPI imports in , and was about to add the frontend API functions to  before creating the UI components.
     - Status: IN PROGRESS
-    - Agent Testing Done: Y (for backend changes of Phase 1 & 2 via  and )
+    - Agent Testing Done: N
     - Which testing method agent to use? both
     - User Testing Done: N
 
 **All Pending/In progress Issue list**:
-  - Issue 1: (P1) False-positive ESLint parsing errors.
-  - Issue 2: (P2) Enable and Test Google Maps Integration.
+  - Issue 1:  (P2) Enable and Test Google Maps Integration.
 
   Issues Detail:
   - Issue 1: 
-     - Attempted fixes: The agent encountered multiple  errors when linting new TypeScript files (). It tried rewriting the code and removing type annotations, but the error persisted. The agent concluded it was a false positive as the  command succeeded.
+     - Attempted fixes: An optional boolean toggle has been implemented in the settings UI. The backend logic is conditional on this toggle and the presence of an API key.
      - Next debug checklist: 
-        1. Examine  to ensure the TypeScript parser is correctly configured for the version of TypeScript/React being used.
-        2. Check for conflicting ESLint plugins or rules.
-        3. Consider updating the parser or related ESLint packages.
-     - Why fix this issue and what will be achieved with the fix?: Fixing this will ensure accurate linting for future frontend development, preventing real syntax errors from being ignored and improving code quality.
-     - Status: NOT STARTED
-     - Is recurring issue? Y
-     - Should Test frontend/backend/both after fix?: frontend
-     - Blocked on other issue: None
-  - Issue 2: 
-     - Attempted fixes: The agent implemented a boolean toggle and a settings UI for the Google Maps integration, per the user's request to bypass the hard requirement for an API key.
-     - Next debug checklist: 
-        1. Prompt the user to provide the Google Maps API key and add it to .
-        2. Once the key is set, use the UI toggle in the Settings page to enable the feature.
+        1. Prompt the user to provide the Google Maps API key and add it to  under the  variable.
+        2. Use the UI toggle in the Settings page to enable the feature.
         3. Test the route calculation endpoint () to confirm it works.
-        4. Implement the frontend UI to display route information.
+        4. Implement the frontend UI to display route information on the scheduling board or job details.
      - Why fix this issue and what will be achieved with the fix?: This will enable the Intelligent Routing feature, a core requirement of RFC-002.
-     - Status: BLOCKED (on user providing API key)
+     - Status:  BLOCKED
      - Is recurring issue? N
      - Should Test frontend/backend/both after fix?: both
-     - Blocked on other issue: None
+     - Blocked on other issue: User providing the API key.
 
 **In progress Task List**:
-  - Task 1: (P0) Complete Authentication Implementation
-  - Task 2: (P1) Implement Frontend for Invoices & Payments
-  - Task 3: (P1) Implement Frontend for Vendors & Purchase Orders
-  - Task 4: (P2) Implement AI Features (Gemini)
-  - Task 5: (P2) Implement Data Import Wizards
+  - Task 1:  (P0) Complete WebSocket-based Job Chat
+  - Task 2:  (P1) Implement Multi-warehouse Inventory
+  - Task 3:  (P1) Fully Implement Evidence-Based Checklists Page
 
  Task Detail:
   - Task 1: 
-     - Where to resume: The backend JWT generation/validation and user registration endpoints are complete. The frontend  functions exist in . The next step is to create , a global  to manage user state and tokens, and implement protected routes in . Finally, integrate Emergent-managed Google OAuth as a second login option.
-     - What will be achieved with this?: A complete, secure login system for the application, fulfilling a critical requirement.
-     - Status: IN PROGRESS
+     - Where to resume: Backend models and initial  imports are done. The next steps are:
+        1. Add the WebSocket connection manager and chat API endpoints to .
+        2. Add chat-related functions to .
+        3. Create the frontend UI components for both internal (staff-to-technician) and external (staff-to-customer) chat, likely integrated into the Job Details page.
+     - What will be achieved with this?: A real-time communication channel for jobs, separating internal discussion from customer communication.
+     - Status:  IN PROGRESS
      - Should Test frontend/backend/both after fix?: both
-     - Blocked on something: No
+     - Blocked on something: No.
   - Task 2: 
-     - Where to resume: A placeholder page exists at . This needs to be built out to list invoices, show their status, and allow for payment recording. The backend APIs for this already exist.
-     - What will be achieved with this?: A functional UI for managing customer invoices and payments.
-     - Status: NOT STARTED
-     - Should Test frontend/backend/both after fix?: frontend
-     - Blocked on something: Authentication (Task 1) should be completed first to properly scope invoices to users/roles.
+     - Where to resume: This task has not been started. It will require adding models for different inventory locations (e.g., warehouse, truck), APIs to manage stock across these locations, and a frontend UI to view and transfer inventory.
+     - What will be achieved with this?: A system to track parts and equipment across multiple locations, including technician trucks.
+     - Status:  NOT STARTED
+     - Should Test frontend/backend/both after fix?: both
+     - Blocked on something: No.
   - Task 3: 
-     - Where to resume: A placeholder page exists at . This UI needs to be built to manage vendors and create/track purchase orders. The backend APIs for this already exist.
-     - What will be achieved with this?: A functional UI for inventory and supply chain management.
-     - Status: NOT STARTED
+     - Where to resume: The agent created a placeholder page at  but did not implement the full functionality. The backend models and APIs for checklists and evidence exist. The frontend page needs to be built out to allow technicians to view job-specific checklists, mark items as complete, and upload photo evidence as required.
+     - What will be achieved with this?: A functional UI for technicians to complete job checklists, ensuring quality control and providing evidence of work.
+     - Status:  NOT STARTED
      - Should Test frontend/backend/both after fix?: frontend
-     - Blocked on something: Authentication (Task 1).
-  - Task 4: 
-     - Where to resume: The  library for Gemini is installed. A basic AI endpoint stub exists in . This needs to be connected to the Gemini API using the playbook, and frontend components must be built to interact with the AI features (e.g., a Summarize Job button).
-     - What will be achieved with this?: Delivers the first AI-powered feature for smart job management.
-     - Status: NOT STARTED
-     - Should Test frontend/backend/both after fix?: both
-     - Blocked on something: No
-  - Task 5: 
-     - Where to resume: A backend endpoint stub for data import exists in . This needs to be implemented to parse CSV files. A frontend UI needs to be created to allow users to upload files for Customers, Leads, Jobs, etc.
-     - What will be achieved with this?: Allows users to easily onboard their existing data into the platform.
-     - Status: NOT STARTED
-     - Should Test frontend/backend/both after fix?: both
-     - Blocked on something: No
+     - Blocked on something: No.
 
 **Upcoming and Future Tasks**
 Upcoming Tasks:
--   **(P1) Ad-hoc Reporting Builder**: Create a UI to build custom reports based on filters and aggregations.
--   **(P1) Evidence-Based Checklists**: Implement the frontend UI for technicians to complete checklists with photo evidence.
--   **(P2) Scheduling Boards**: Build the UI for the service and install drag-and-drop scheduling boards.
+-   **(P2) Mobile App (React Native)**: Create a dedicated mobile application for field technicians.
 
 Future Tasks:
--   **(P2) Deeper Accounting Integration**: Bi-directional sync with accounting systems.
--   **(P2) Install Project Billing**: Implement milestone-based billing.
--   **(P3) Customer Self-Service Portal Enhancements**: Implement reschedule requests and other features.
--   **(P3) Internal Communication**: Job-scoped chat between office and field.
+-   **(P2) Deeper Accounting Integration**: Implement bi-directional sync with major accounting platforms.
 
 **Completed work in this session**
-- **RFC-002 Backend Foundation**: Implemented backend models and APIs for Leads, PCBs, Proposals, Job Types, and Vendors.
-- **Google Maps Configuration**: Implemented the user's request for a boolean toggle in the UI to enable/disable the Google Maps integration, contingent on an API key in .
-- **Backend Bug Fix**: Fixed a bug in the  endpoint identified by the testing agent.
-- **Leads Page UI**: Created a new, full-featured  page with metrics cards, tabs for Leads/PCBs, search, and filtering.
-- **New Page Scaffolding**: Created and routed new pages: , , , and .
-- **Authentication/AI/Import Prep**: Added dependencies (, , , ), environment variables, and initial API stubs for authentication, AI, and import wizards.
-- **Documentation**: Overhauled  to reflect the new RFC-002 structure and progress.
-- **Testing**: Successfully used  and the  to validate all new backend endpoints for Phase 1 & 2 of the RFC.
+- **Full Authentication System**: Implemented and tested a complete JWT and Emergent-managed Google OAuth login system (,  protected routes,  UI).
+- **AI Feature Integration**: Fixed and implemented Gemini-powered features for job summaries and scheduling suggestions ().
+- **Data Import Wizard**: Created a full-featured frontend UI () for the existing backend import functionality.
+- **Stripe Payment Integration**: Integrated Stripe to allow customers to pay invoices online, including backend webhooks and frontend UI updates ().
+- **Ad-hoc Reporting Builder**: Created a functional UI () and corresponding backend query endpoint for generating custom reports.
+- **Scheduling Board**: Built a comprehensive drag-and-drop scheduling board UI ().
+- **Install Project Billing**: Implemented a system for milestone-based billing for large projects, including configurable templates (, , ).
+- **Customer Portal Enhancements**: Added a feature for customers to request job reschedules, with dispatcher approval required ().
+- **ESLint Configuration Fix**: Resolved a persistent  by correcting the ESLint flat configuration in .
+- **Thorough Testing**: Successfully used  multiple times (, , ), which found and fixed minor bugs.
 
 **Earlier issues found/mentioned but not fixed**
-   - The agent called the testing agent in a previous job to test the dual clock-in feature but never checked or acted upon the results. The status of this test report remains unknown.
+   - **Dual Clock-In Test Report**: An issue from a much earlier fork mentioned that the testing agent was called to test a dual clock-in feature, but the results were never checked or acted upon. This remains unresolved.
 
 **Known issue recurrence from previous fork**
-  - N/A
+  - **ESLint Parsing Errors**: This was a recurring issue that is now **RESOLVED**. The agent identified the problem in the  flat config setup and fixed it. Running  directly now passes without parsing errors.
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
 - **Frontend**: React, TypeScript, Tailwind CSS, Shadcn/ui, Vite, , .
-- **Backend**: FastAPI, Python, Pydantic, Motor (async MongoDB).
+- **Backend**: FastAPI, Python, Pydantic, Motor (async MongoDB), WebSockets.
 - **Authentication**: JWT (, , ) and Google OAuth (via ).
 - **AI**: Gemini 3 Flash via .
 - **Database**: MongoDB.
+- **Payments**: Stripe.
 
 **key DB schema**
 - **users**: 
 - **leads**: 
-- **pcbs**: 
-- **proposals**: 
-- **job_types**: 
-- **vendors**: 
+- **invoices**: 
+- **chat_messages**: 
+- **milestone_templates**: 
+- **install_projects**: 
+- **reschedule_requests**: 
 
 **changes in tech stack**
-- Added  for LLM and Google Auth.
-- Added ,  for JWT-based authentication.
+- Added  for backend HTTP requests.
+- Backend now utilizes FastAPI's  for real-time communication.
+- Added  python library for payment processing.
 
 **All files of reference**
-- : Heavily updated with new APIs for auth, leads, PCBs, proposals, vendors, and stubs for AI and imports. Google Maps logic was made conditional.
-- : Updated with Pydantic models for all new data structures.
-- : Updated with .
-- : Updated with new dependencies.
-- : Overwritten with a full-featured UI.
-- : New file.
-- : New file.
-- : New file (placeholder).
-- : New file (placeholder).
-- : Updated with many new API client functions.
-- : Updated with new routes for all the new pages.
-- : Overwritten with new RFC-002 structure.
+- : Massively updated with endpoints for Google Auth, AI (fixed), reports, Stripe payments, project billing, reschedule requests, and initial WebSocket setup.
+- : Updated with models for Chat, Milestone Templates, and Reschedule Requests.
+- : Fixed concatenation of API keys.
+- : Overwritten to fix TSX parsing issues.
+- : Overwritten to integrate  and add numerous new routes for implemented features.
+- : Heavily modified to send  headers and add API functions for all new features (Stripe, reports, projects, etc.).
+- : New file to manage global auth state.
+- : Updated to include a Continue with Google button.
+- : Updated with Pay Online button and Stripe payment flow.
+- : Enhanced with a Reschedule Request feature.
+- **New Pages Created**: , , , ,  (placeholder).
+- : Updated multiple times to reflect significant progress.
 
 **Areas that need refactoring**:
-- The ESLint configuration in  likely needs to be fixed to correctly parse TypeScript/TSX files and avoid false-positive errors.
+- The  page is currently a non-functional placeholder and needs to be fully implemented.
+- The  in  was duplicated; one was renamed to . This could be cleaned up into a single cohesive payment module.
 
 **key api endpoints**
-- , : (POST) JWT authentication.
-- , : Google OAuth flow.
-- , : CRUD for Leads.
-- , : CRUD for PCBs.
-- : CRUD for Proposals.
-- : (GET/POST) For managing system settings like the Google Maps toggle.
-- : (POST) Stub for AI features.
-- : (POST) Stub for data import.
+- : (WebSocket) Real-time chat endpoint.
+- : (POST) Exchange Google session for JWT.
+- : (POST) Generate custom reports.
+- : (POST) Create a Stripe checkout session.
+- : (POST) Handle Stripe payment events.
+- : (GET/POST) Manage milestone billing templates.
+- : (POST) Customer reschedule request endpoint.
 
 **Critical Info for New Agent**
-- You are in the middle of a large, multi-phase implementation based on RFC-002. The current focus is completing the In Progress Task List.
-- The immediate highest priority (P0) is to complete the authentication system (JWT and Google OAuth), as other features will depend on it. Start by creating the Login page and an Auth context.
-- The user has approved a specific set of technologies: JWT + Google Auth, Gemini 3 Flash for AI, and comprehensive data import wizards. Stick to this plan.
-- The Google Maps feature is blocked until the user provides an API key, but the app is configured to work without it for now. Do not get stuck on this.
-- Be aware of the ESLint configuration issue which may report false errors on valid TypeScript files.
+- You are continuing a large, multi-phase implementation based on RFC-002. Many core features are now complete and tested.
+- The immediate highest priority (P0) is to finish the **WebSocket-based Job Chat**. The user wants separate channels for internal and customer communication.
+- After the chat feature, the next priorities are **Multi-warehouse Inventory** and completing the **Evidence-Based Checklists** UI.
+- The ESLint parsing error is **fixed**. yarn run v1.22.22
+info Visit https://yarnpkg.com/en/docs/cli/run for documentation about this command. may still show warnings, but it no longer fails on valid TSX syntax.
+- The Google Maps feature remains blocked pending a user-provided API key. Do not get stuck on it.
 
 **documents and test reports created in this job**
--  (overwritten)
 - 
+- 
+- 
+- 
+-  (overwritten multiple times)
 
 **Last 10 User Messages and any pending HUMAN messages**
-- **User Message**: Provides a comprehensive RFC-002 detailing requirements for a full HVAC platform. Asks to skip the Google Maps API key requirement for now and make it a configurable boolean. (Status: **In Progress**)
-- **Agent Message**: Acknowledges the RFC and proposes a phased plan. (Status: **Acknowledged**)
-- **User Message**: Approves working through Phases 1 and 2, then scaffolding the rest, while preserving existing features. (Status: **Approved**)
-- **Agent Action**: Agent completes backend for Phases 1 & 2, creates frontend for Leads, Proposals, and Settings, and fixes a bug found by the testing agent. (Status: **Completed**)
-- **User Message**: Lists the next set of features to implement: auth, AI, import wizards, reporting, and UI for invoices/vendors. (Status: **In Progress**)
-- **Agent Message**: Asks for clarification on implementation choices for auth, AI, and imports. (Status: **Pending Human Input**)
-- **User Message**: C (interpreted as confirmation of default choices). Provides clear choices: JWT + Google Auth, Gemini 3 Flash, and all data types for import. (Status: **Provided**)
-- **Agent Action**: Agent begins implementation of the new feature set, starting with dependencies, backend stubs, and creating placeholder UIs for Invoices and Vendors. The agent is currently starting the authentication feature. (Status: **In Progress**)
+- The user approved moving forward with the next set of backlog items, specifying requirements for several:
+  - **Project Billing**: Should have configurable templates.
+  - **Reschedule Requests**: Should require dispatcher approval.
+  - **User Approved**: Agent implemented these features.
+- The user then approved the next set of tasks from the backlog:
+  - **Internal Chat**: Should use real-time WebSockets.
+  - **Communication**: There should be a separate chat for internal staff and another for customer communication.
+  - **User Approved**: Agent began work on the ESLint fix and the WebSocket chat system.
 
 **Project Health Check:**
-- **Broken**: Authentication is partially implemented and therefore broken. The Invoices and Vendors pages are placeholders and not functional.
-- **Mocked**: No mocked features.
+- **Broken**:
+    - The Job Chat feature is partially implemented and non-functional.
+    - The Checklists page is a placeholder and non-functional.
+- **Mocked**: None.
 
 **3rd Party Integrations**
 - **Gemini 3 Flash**: For AI features. Integrated via . Uses Emergent LLM Key.
-- **Emergent-managed Google Auth**: For social login. Playbook received from .
+- **Emergent-managed Google Auth**: For social login. Integrated via .
+- **Stripe**: For invoice payments. Integrated via  library. Requires  in .
 - : Used for the drag-and-drop Kanban board.
-- : Integrated but **inactive**. Requires a User API Key to be added to  and enabled in the settings UI.
+- : Integrated but **inactive**. Requires a User API Key.
 
 **Testing status**
-  - Testing agent used after significant changes: YES. The agent used  to validate the backend APIs for RFC-002 Phase 1/2. It found one bug, which was subsequently fixed and verified by the agent.
+  - Testing agent used after significant changes: YES. The agent ran the testing agent three times (, , ) after major feature completions. All tests passed, with the agent fixing minor bugs found during the process.
   - Troubleshoot agent used after agent stuck in loop: NO
   - Test files created: None.
   - Known regressions: None.
 
 **Credentials to test flow:**
-- A test user has been registered:  with password .
+- A test user has been registered:  with password . This user can also be logged in via the Demo Admin button on the login page.
 - Google Maps API Key is still required from the user for routing features.
+- Stripe API key is present in  for testing payments.
 
 **What agent forgot to execute**
-- The agent did not complete the authentication feature. It stopped after preparing the backend and adding frontend API calls, before creating the necessary UI () and state management ().
-- The agent did not resolve the underlying ESLint configuration issue causing false-positive parsing errors, opting to bypass it because the build succeeded.</analysis>
+- The agent created the  page as a placeholder but never returned to implement the full functionality. This task needs to be completed.</analysis>
