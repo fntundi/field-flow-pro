@@ -843,6 +843,87 @@ const CustomerPortal = () => {
           </motion.div>
         </div>
       )}
+
+      {/* Reschedule Request Modal */}
+      {rescheduleDialogOpen && selectedJobForReschedule && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-lg w-full"
+          >
+            <h2 className="text-xl font-bold mb-2">Request Reschedule</h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              Job: {selectedJobForReschedule.job_number} - Currently scheduled for{" "}
+              {selectedJobForReschedule.scheduled_date ? new Date(selectedJobForReschedule.scheduled_date).toLocaleDateString() : "TBD"}
+            </p>
+            
+            <div className="space-y-4">
+              <div>
+                <Label>Preferred New Date *</Label>
+                <Input
+                  type="date"
+                  value={rescheduleForm.requested_date}
+                  onChange={(e) => setRescheduleForm({ ...rescheduleForm, requested_date: e.target.value })}
+                  min={new Date().toISOString().split('T')[0]}
+                />
+              </div>
+              
+              <div>
+                <Label>Preferred Time</Label>
+                <Select
+                  value={rescheduleForm.requested_time_preference}
+                  onValueChange={(v) => setRescheduleForm({ ...rescheduleForm, requested_time_preference: v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="anytime">Anytime</SelectItem>
+                    <SelectItem value="morning">Morning (8AM - 12PM)</SelectItem>
+                    <SelectItem value="afternoon">Afternoon (12PM - 5PM)</SelectItem>
+                    <SelectItem value="evening">Evening (5PM - 8PM)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div>
+                <Label>Reason (Optional)</Label>
+                <Textarea
+                  value={rescheduleForm.reason}
+                  onChange={(e) => setRescheduleForm({ ...rescheduleForm, reason: e.target.value })}
+                  placeholder="Why do you need to reschedule?"
+                  rows={2}
+                />
+              </div>
+              
+              <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg text-sm">
+                <div className="flex items-center gap-2 text-yellow-700 dark:text-yellow-400">
+                  <AlertTriangle className="w-4 h-4" />
+                  <span className="font-medium">Requires Approval</span>
+                </div>
+                <p className="text-yellow-600 dark:text-yellow-400/80 mt-1">
+                  Your reschedule request will be reviewed by our dispatch team.
+                  You will be notified once approved or if we need to suggest an alternative time.
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex gap-2 mt-6">
+              <Button variant="outline" onClick={() => {
+                setRescheduleDialogOpen(false);
+                setSelectedJobForReschedule(null);
+              }} className="flex-1">
+                Cancel
+              </Button>
+              <Button onClick={handleRescheduleRequest} disabled={loading || !rescheduleForm.requested_date} className="flex-1">
+                {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CalendarClock className="w-4 h-4 mr-2" />}
+                Submit Request
+              </Button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 };
