@@ -56,6 +56,11 @@ import { usePushNotifications, usePWAInstall, useOnlineStatus } from "@/hooks/us
 export default function Settings() {
   const [activeTab, setActiveTab] = useState("general");
   const queryClient = useQueryClient();
+  
+  // PWA hooks for device-specific settings
+  const pushNotifications = usePushNotifications();
+  const pwaInstall = usePWAInstall();
+  const isOnline = useOnlineStatus();
 
   // Queries
   const { data: settings, isLoading: settingsLoading } = useQuery({
