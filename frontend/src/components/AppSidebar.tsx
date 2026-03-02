@@ -24,6 +24,7 @@ import {
   FolderKanban,
   LogOut,
   Upload,
+  GanttChart,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
