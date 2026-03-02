@@ -1,26 +1,10 @@
 # Backend Routes Package
-# This module organizes all API routes into logical groups
+# This module provides the router structure for modular route organization
+# Routes are being incrementally migrated from server.py
 
 from fastapi import APIRouter
 
-# Create the main API router that will be mounted to the app
-api_router = APIRouter()
+# Note: Individual route modules are stub files for now
+# Full migration will move route handlers from server.py to these modules
 
-# Import all route modules - they will register their routes with api_router
-from . import (
-    auth,
-    technicians,
-    jobs,
-    scheduling,
-    inventory,
-    customers,
-    projects,
-    financials,
-    leads,
-    integrations,
-    settings,
-    reports,
-)
-
-# Re-export the api_router for use in server.py
 __all__ = ["api_router"]
