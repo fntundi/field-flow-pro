@@ -367,11 +367,26 @@ const JobDetail = () => {
           <div className="space-y-2 text-sm">
             <p className="font-medium text-foreground">{job.customer_name}</p>
             {job.customer_phone && (
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Phone className="w-3 h-3" />
-                <a href={`tel:${job.customer_phone}`} className="hover:text-accent">
-                  {job.customer_phone}
-                </a>
+              <div className="flex items-center gap-2">
+                <Phone className="w-3 h-3 text-muted-foreground" />
+                <span className="text-muted-foreground">{job.customer_phone}</span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 px-2 text-xs"
+                  onClick={() => handleClickToCall(job.customer_phone!)}
+                  disabled={isCallingCustomer}
+                  data-testid="click-to-call-button"
+                >
+                  {isCallingCustomer ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <>
+                      <PhoneCall className="w-3 h-3 mr-1" />
+                      Call
+                    </>
+                  )}
+                </Button>
               </div>
             )}
             {job.customer_email && (
