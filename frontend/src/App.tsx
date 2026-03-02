@@ -48,7 +48,8 @@ const App = () => (
           <Route path="/jobs/:id" element={<AppLayout><JobDetail /></AppLayout>} />
           <Route path="/projects/:projectId" element={<AppLayout><GanttChart /></AppLayout>} />
           <Route path="/projects" element={<AppLayout><PlaceholderPage title="Projects" subtitle="Multi-day install projects and phases" /></AppLayout>} />
-          <Route path="/sales" element={<AppLayout><PlaceholderPage title="Sales" subtitle="Quotes, proposals, and close tracking" /></AppLayout>} />
+          <Route path="/sales" element={<AppLayout><Proposals /></AppLayout>} />
+          <Route path="/proposals" element={<AppLayout><Proposals /></AppLayout>} />
           <Route path="/estimates" element={<AppLayout><Estimates /></AppLayout>} />
           <Route path="/dispatch" element={<AppLayout><Dispatch /></AppLayout>} />
           <Route path="/leads" element={<AppLayout><Leads /></AppLayout>} />
