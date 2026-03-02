@@ -33,6 +33,7 @@ import Settings from "@/pages/Settings";
 import Login from "@/pages/Login";
 import ImportWizard from "@/pages/ImportWizard";
 import Checklists from "@/pages/Checklists";
+import ReportsBuilder from "@/pages/ReportsBuilder";
 import { Loader2 } from "lucide-react";
 
 const queryClient = new QueryClient();
