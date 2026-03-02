@@ -1,14 +1,15 @@
 import { motion } from "framer-motion";
 import StatusBadge from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
 import { Plus, Phone, Mail } from "lucide-react";
 
 const leads = [
-  { id: "LEAD-301", name: "Robert Kim", source: "Website", phone: "(214) 555-0142", status: "open" as const, pcb: null, created: "Feb 27" },
-  { id: "LEAD-300", name: "Jennifer Moore", source: "Referral", phone: "(972) 555-0198", status: "in_progress" as const, pcb: "PCB-089", created: "Feb 26" },
-  { id: "LEAD-299", name: "Williams & Sons LLC", source: "Google Ads", phone: "(469) 555-0231", status: "complete" as const, pcb: null, created: "Feb 25" },
-  { id: "LEAD-298", name: "Patricia Gray", source: "Phone", phone: "(214) 555-0377", status: "pending" as const, pcb: "PCB-088", created: "Feb 25" },
-  { id: "LEAD-297", name: "Anderson Group", source: "Website", phone: "(972) 555-0456", status: "open" as const, pcb: null, created: "Feb 24" },
+  { id: "LEAD-301", name: "Robert Kim", source: "Website", phone: "(214) 555-0142", status: "open" as const, pcb: null, created: "Feb 27", converted: false },
+  { id: "LEAD-300", name: "Jennifer Moore", source: "Referral", phone: "(972) 555-0198", status: "in_progress" as const, pcb: "PCB-089", created: "Feb 26", converted: false },
+  { id: "LEAD-299", name: "Williams & Sons LLC", source: "Google Ads", phone: "(469) 555-0231", status: "complete" as const, pcb: null, created: "Feb 25", converted: true, jobId: "JOB-1039" },
+  { id: "LEAD-298", name: "Patricia Gray", source: "Phone", phone: "(214) 555-0377", status: "pending" as const, pcb: "PCB-088", created: "Feb 25", converted: false },
+  { id: "LEAD-297", name: "Anderson Group", source: "Website", phone: "(972) 555-0456", status: "open" as const, pcb: null, created: "Feb 24", converted: false },
 ];
 
 const pcbs = [
@@ -30,7 +31,6 @@ const Leads = () => {
         </Button>
       </div>
 
-      {/* Leads Table */}
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="metric-card !p-0 overflow-hidden">
         <div className="px-5 py-4 border-b border-border">
           <h3 className="text-sm font-semibold text-foreground">Active Leads</h3>
@@ -46,8 +46,16 @@ const Leads = () => {
                 <td className="font-medium">{lead.name}</td>
                 <td className="text-muted-foreground">{lead.source}</td>
                 <td className="text-muted-foreground text-xs">{lead.phone}</td>
-                <td className="font-mono text-xs">{lead.pcb || "—"}</td>
-                <td><StatusBadge status={lead.status} /></td>
+                <td className="font-mono text-xs">
+                  {lead.pcb ? <span className="text-accent">{lead.pcb}</span> : "—"}
+                </td>
+                <td>
+                  {lead.converted && 'jobId' in lead ? (
+                    <Link to={`/jobs/${(lead as any).jobId}`} className="text-xs text-accent hover:underline">Converted → Job</Link>
+                  ) : (
+                    <StatusBadge status={lead.status} />
+                  )}
+                </td>
                 <td className="text-muted-foreground text-xs">{lead.created}</td>
               </tr>
             ))}
@@ -55,7 +63,6 @@ const Leads = () => {
         </table>
       </motion.div>
 
-      {/* PCBs */}
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="metric-card !p-0 overflow-hidden">
         <div className="px-5 py-4 border-b border-border">
           <h3 className="text-sm font-semibold text-foreground">Potential Call-Backs (PCBs)</h3>
