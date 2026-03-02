@@ -7449,6 +7449,561 @@ async def ensure_default_milestone_templates():
     await db.milestone_templates.insert_many(default_templates)
     logger.info(f"Created {len(default_templates)} default milestone templates")
 
+# ==================== PUSH NOTIFICATIONS API ====================
+
+# Generate VAPID keys if not present
+import base64
+import os
+
+def get_or_create_vapid_keys():
+    """Get or create VAPID keys for push notifications"""
+    # Check if keys exist in settings
+    # For now, use environment variables or generate
+    public_key = os.environ.get("VAPID_PUBLIC_KEY")
+    private_key = os.environ.get("VAPID_PRIVATE_KEY")
+    
+    if not public_key or not private_key:
+        # Generate new keys (in production, these should be stored securely)
+        try:
+            from cryptography.hazmat.primitives.asymmetric import ec
+            from cryptography.hazmat.backends import default_backend
+            from cryptography.hazmat.primitives import serialization
+            
+            private_key_obj = ec.generate_private_key(ec.SECP256R1(), default_backend())
+            public_key_obj = private_key_obj.public_key()
+            
+            # Export keys in appropriate format
+            private_bytes = private_key_obj.private_numbers().private_value.to_bytes(32, 'big')
+            public_bytes = public_key_obj.public_bytes(
+                serialization.Encoding.X962,
+                serialization.PublicFormat.UncompressedPoint
+            )
+            
+            private_key = base64.urlsafe_b64encode(private_bytes).decode('utf-8').rstrip('=')
+            public_key = base64.urlsafe_b64encode(public_bytes).decode('utf-8').rstrip('=')
+        except ImportError:
+            # Fallback: use placeholder keys (won't work for actual push)
+            public_key = "BEp_5DcTDxEKvbmr8zBGqq7YH5H3xAyYxqXvDRBQf9lJLzqsT8mvYKqkfKNRq4xBqS5z8WfvB_uY3lJdPKjKjKk"
+            private_key = "placeholder_private_key"
+    
+    return public_key, private_key
+
+@api_router.get("/push/vapid-key")
+async def get_vapid_public_key(user: dict = Depends(require_auth)):
+    """Get VAPID public key for push subscription"""
+    settings = await get_system_settings()
+    if not settings.push_notifications_enabled:
+        raise HTTPException(status_code=400, detail="Push notifications are disabled")
+    
+    public_key, _ = get_or_create_vapid_keys()
+    return {"publicKey": public_key}
+
+@api_router.post("/push/subscribe")
+async def subscribe_to_push(data: dict, request: Request, user: dict = Depends(require_auth)):
+    """Subscribe a device to push notifications"""
+    settings = await get_system_settings()
+    if not settings.push_notifications_enabled:
+        raise HTTPException(status_code=400, detail="Push notifications are disabled")
+    
+    subscription_data = data.get("subscription", {})
+    
+    # Check if subscription already exists
+    existing = await db.push_subscriptions.find_one({
+        "endpoint": subscription_data.get("endpoint")
+    })
+    
+    if existing:
+        # Update existing subscription
+        await db.push_subscriptions.update_one(
+            {"id": existing["id"]},
+            {"$set": {
+                "user_id": user["id"],
+                "is_active": True,
+                "updated_at": datetime.now(timezone.utc)
+            }}
+        )
+        return {"message": "Subscription updated", "id": existing["id"]}
+    
+    # Create new subscription
+    subscription = {
+        "id": str(uuid.uuid4()),
+        "user_id": user["id"],
+        "endpoint": subscription_data.get("endpoint"),
+        "keys": subscription_data.get("keys", {}),
+        "device_type": "web",
+        "user_agent": request.headers.get("user-agent"),
+        "is_active": True,
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc)
+    }
+    
+    await db.push_subscriptions.insert_one(subscription)
+    return {"message": "Subscribed successfully", "id": subscription["id"]}
+
+@api_router.post("/push/unsubscribe")
+async def unsubscribe_from_push(data: dict, user: dict = Depends(require_auth)):
+    """Unsubscribe a device from push notifications"""
+    endpoint = data.get("endpoint")
+    
+    if endpoint:
+        await db.push_subscriptions.update_one(
+            {"endpoint": endpoint, "user_id": user["id"]},
+            {"$set": {"is_active": False, "updated_at": datetime.now(timezone.utc)}}
+        )
+    
+    return {"message": "Unsubscribed successfully"}
+
+@api_router.get("/push/subscriptions")
+async def get_my_subscriptions(user: dict = Depends(require_auth)):
+    """Get user's push subscriptions"""
+    subscriptions = await db.push_subscriptions.find(
+        {"user_id": user["id"], "is_active": True},
+        {"_id": 0, "keys": 0}  # Don't expose keys
+    ).to_list(10)
+    return subscriptions
+
+async def send_push_notification(
+    user_id: str,
+    notification_type: str,
+    title: str,
+    body: str,
+    data: dict = None
+):
+    """Send push notification to a user's subscribed devices"""
+    settings = await get_system_settings()
+    if not settings.push_notifications_enabled:
+        return
+    
+    # Check notification type settings
+    if notification_type == "chat" and not settings.notify_on_chat_message:
+        return
+    if notification_type == "job_assignment" and not settings.notify_on_job_assignment:
+        return
+    if notification_type == "schedule_change" and not settings.notify_on_schedule_change:
+        return
+    if notification_type == "payment" and not settings.notify_on_payment_received:
+        return
+    
+    # Get user's active subscriptions
+    subscriptions = await db.push_subscriptions.find(
+        {"user_id": user_id, "is_active": True}
+    ).to_list(10)
+    
+    if not subscriptions:
+        return
+    
+    _, private_key = get_or_create_vapid_keys()
+    
+    for sub in subscriptions:
+        try:
+            # In production, use pywebpush library
+            # For now, log the notification
+            logger.info(f"Push notification to {user_id}: {title} - {body}")
+            
+            # Log the notification
+            log_entry = {
+                "id": str(uuid.uuid4()),
+                "user_id": user_id,
+                "subscription_id": sub["id"],
+                "notification_type": notification_type,
+                "title": title,
+                "body": body,
+                "data": data,
+                "status": "sent",
+                "sent_at": datetime.now(timezone.utc),
+                "created_at": datetime.now(timezone.utc)
+            }
+            await db.notification_logs.insert_one(log_entry)
+            
+        except Exception as e:
+            logger.error(f"Failed to send push to {sub['id']}: {e}")
+            await db.push_subscriptions.update_one(
+                {"id": sub["id"]},
+                {"$inc": {"error_count": 1}}
+            )
+
+# ==================== AI FAILOVER SYSTEM ====================
+
+async def get_ai_response_with_failover(prompt: str, session_id: str = "default") -> dict:
+    """Get AI response with provider failover support"""
+    settings = await get_system_settings()
+    
+    if not settings.ai_features_enabled:
+        raise ValueError("AI features are disabled")
+    
+    api_key = os.environ.get("EMERGENT_LLM_KEY")
+    if not api_key:
+        raise ValueError("EMERGENT_LLM_KEY not configured")
+    
+    # Get AI config
+    ai_config = await db.ai_provider_config.find_one({})
+    if not ai_config:
+        ai_config = {
+            "primary_provider": settings.ai_provider,
+            "primary_model": settings.ai_model,
+            "failover_providers": [
+                {"provider": "openai", "model": "gpt-4o-mini"},
+                {"provider": "claude", "model": "claude-3-haiku-20240307"}
+            ],
+            "failover_enabled": settings.ai_failover_enabled,
+            "fallback_to_simple": True
+        }
+    
+    from emergentintegrations.llm.chat import LlmChat, UserMessage
+    
+    # Build provider chain
+    providers = [{"provider": ai_config["primary_provider"], "model": ai_config["primary_model"]}]
+    if ai_config.get("failover_enabled", True):
+        providers.extend(ai_config.get("failover_providers", []))
+    
+    last_error = None
+    used_provider = None
+    
+    for provider_config in providers:
+        try:
+            client = LlmChat(
+                api_key=api_key,
+                session_id=session_id,
+                system_message="You are a helpful HVAC service assistant for BreezeFlow, an HVAC business operations platform."
+            )
+            
+            client = client.with_model(
+                provider=provider_config["provider"],
+                model=provider_config["model"]
+            )
+            
+            user_msg = UserMessage(text=prompt)
+            response = await client.send_message(user_msg)
+            
+            used_provider = provider_config
+            
+            # Track success
+            await db.ai_provider_config.update_one(
+                {},
+                {"$inc": {"total_requests": 1}, "$set": {"updated_at": datetime.now(timezone.utc)}},
+                upsert=True
+            )
+            
+            return {
+                "response": response,
+                "provider": provider_config["provider"],
+                "model": provider_config["model"],
+                "failover_used": provider_config != providers[0]
+            }
+            
+        except Exception as e:
+            last_error = e
+            logger.warning(f"AI provider {provider_config['provider']} failed: {e}")
+            
+            # Track failure
+            await db.ai_provider_config.update_one(
+                {},
+                {
+                    "$inc": {"failed_requests": 1, "failover_count": 1},
+                    "$set": {"last_failure_at": datetime.now(timezone.utc)}
+                },
+                upsert=True
+            )
+            continue
+    
+    # All providers failed - use simple fallback if enabled
+    if ai_config.get("fallback_to_simple", True):
+        return {
+            "response": generate_simple_summary(prompt),
+            "provider": "fallback",
+            "model": "simple",
+            "failover_used": True,
+            "all_providers_failed": True
+        }
+    
+    raise ValueError(f"All AI providers failed. Last error: {last_error}")
+
+def generate_simple_summary(prompt: str) -> str:
+    """Generate a simple summary without AI when all providers fail"""
+    # Extract key information from prompt
+    lines = prompt.split('\n')
+    summary_parts = []
+    
+    for line in lines:
+        line = line.strip()
+        if line.startswith('-') or line.startswith('•'):
+            summary_parts.append(line)
+        elif ':' in line and len(line) < 100:
+            summary_parts.append(line)
+    
+    if summary_parts:
+        return "Summary (AI unavailable):\n" + "\n".join(summary_parts[:10])
+    
+    return "Unable to generate AI summary. Please review the details manually."
+
+@api_router.get("/ai/config")
+async def get_ai_config(user: dict = Depends(require_auth)):
+    """Get AI provider configuration (admin only)"""
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    config = await db.ai_provider_config.find_one({}, {"_id": 0})
+    if not config:
+        config = {
+            "primary_provider": "gemini",
+            "primary_model": "gemini-2.0-flash",
+            "failover_providers": [
+                {"provider": "openai", "model": "gpt-4o-mini"},
+                {"provider": "claude", "model": "claude-3-haiku-20240307"}
+            ],
+            "failover_enabled": True,
+            "fallback_to_simple": True,
+            "total_requests": 0,
+            "failed_requests": 0,
+            "failover_count": 0
+        }
+    return config
+
+@api_router.put("/ai/config")
+async def update_ai_config(data: dict, user: dict = Depends(require_auth)):
+    """Update AI provider configuration (admin only)"""
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    allowed_fields = [
+        "primary_provider", "primary_model", "failover_providers",
+        "failover_enabled", "fallback_to_simple", "max_retries"
+    ]
+    
+    update_data = {k: v for k, v in data.items() if k in allowed_fields}
+    update_data["updated_at"] = datetime.now(timezone.utc)
+    update_data["updated_by_id"] = user["id"]
+    
+    # Also update system settings
+    settings_update = {}
+    if "primary_provider" in update_data:
+        settings_update["ai_provider"] = update_data["primary_provider"]
+    if "primary_model" in update_data:
+        settings_update["ai_model"] = update_data["primary_model"]
+    if "failover_enabled" in update_data:
+        settings_update["ai_failover_enabled"] = update_data["failover_enabled"]
+    
+    if settings_update:
+        await db.system_settings.update_one({}, {"$set": settings_update})
+    
+    await db.ai_provider_config.update_one(
+        {},
+        {"$set": update_data},
+        upsert=True
+    )
+    
+    return {"message": "AI configuration updated"}
+
+# ==================== QUICKBOOKS INTEGRATION (SCAFFOLDING) ====================
+
+@api_router.get("/integrations/quickbooks/status")
+async def get_quickbooks_status(user: dict = Depends(require_auth)):
+    """Get QuickBooks integration status"""
+    settings = await get_system_settings()
+    
+    config = await db.quickbooks_config.find_one({}, {"_id": 0, "access_token": 0, "refresh_token": 0})
+    
+    return {
+        "enabled": settings.quickbooks_enabled,
+        "configured": settings.quickbooks_configured,
+        "connected": config.get("is_connected", False) if config else False,
+        "last_sync": settings.quickbooks_last_sync,
+        "sync_settings": {
+            "invoices": settings.quickbooks_sync_invoices,
+            "payments": settings.quickbooks_sync_payments,
+            "customers": settings.quickbooks_sync_customers
+        }
+    }
+
+@api_router.put("/integrations/quickbooks/settings")
+async def update_quickbooks_settings(data: dict, user: dict = Depends(require_auth)):
+    """Update QuickBooks integration settings (admin only)"""
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    allowed_fields = [
+        "quickbooks_enabled", "quickbooks_sync_invoices",
+        "quickbooks_sync_payments", "quickbooks_sync_customers"
+    ]
+    
+    update_data = {k: v for k, v in data.items() if k in allowed_fields}
+    update_data["updated_at"] = datetime.now(timezone.utc)
+    
+    await db.system_settings.update_one({}, {"$set": update_data})
+    
+    return {"message": "QuickBooks settings updated"}
+
+@api_router.get("/integrations/quickbooks/auth-url")
+async def get_quickbooks_auth_url(user: dict = Depends(require_auth)):
+    """Get QuickBooks OAuth authorization URL"""
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    settings = await get_system_settings()
+    if not settings.quickbooks_enabled:
+        raise HTTPException(status_code=400, detail="QuickBooks integration is disabled. Enable it in settings first.")
+    
+    # Check if QuickBooks credentials are configured
+    client_id = os.environ.get("QUICKBOOKS_CLIENT_ID")
+    if not client_id:
+        raise HTTPException(
+            status_code=400,
+            detail="QuickBooks Client ID not configured. Add QUICKBOOKS_CLIENT_ID to environment variables."
+        )
+    
+    # Build OAuth URL (QuickBooks Online)
+    redirect_uri = os.environ.get("QUICKBOOKS_REDIRECT_URI", f"{os.environ.get('REACT_APP_BACKEND_URL', '')}/api/integrations/quickbooks/callback")
+    scope = "com.intuit.quickbooks.accounting"
+    
+    auth_url = (
+        f"https://appcenter.intuit.com/connect/oauth2"
+        f"?client_id={client_id}"
+        f"&response_type=code"
+        f"&scope={scope}"
+        f"&redirect_uri={redirect_uri}"
+        f"&state={str(uuid.uuid4())}"
+    )
+    
+    return {"auth_url": auth_url}
+
+@api_router.get("/integrations/quickbooks/callback")
+async def quickbooks_oauth_callback(code: str = None, state: str = None, realmId: str = None):
+    """Handle QuickBooks OAuth callback"""
+    if not code:
+        raise HTTPException(status_code=400, detail="Authorization code missing")
+    
+    client_id = os.environ.get("QUICKBOOKS_CLIENT_ID")
+    client_secret = os.environ.get("QUICKBOOKS_CLIENT_SECRET")
+    
+    if not client_id or not client_secret:
+        raise HTTPException(status_code=500, detail="QuickBooks credentials not configured")
+    
+    # Exchange code for tokens
+    try:
+        import httpx
+        
+        redirect_uri = os.environ.get("QUICKBOOKS_REDIRECT_URI", "")
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer",
+                data={
+                    "grant_type": "authorization_code",
+                    "code": code,
+                    "redirect_uri": redirect_uri
+                },
+                auth=(client_id, client_secret),
+                headers={"Accept": "application/json"}
+            )
+            
+            if response.status_code != 200:
+                raise HTTPException(status_code=400, detail="Failed to exchange authorization code")
+            
+            tokens = response.json()
+            
+            # Store tokens securely
+            config = {
+                "id": str(uuid.uuid4()),
+                "access_token": tokens.get("access_token"),
+                "refresh_token": tokens.get("refresh_token"),
+                "realm_id": realmId,
+                "token_expires_at": datetime.now(timezone.utc) + timedelta(seconds=tokens.get("expires_in", 3600)),
+                "is_connected": True,
+                "created_at": datetime.now(timezone.utc),
+                "updated_at": datetime.now(timezone.utc)
+            }
+            
+            await db.quickbooks_config.update_one(
+                {},
+                {"$set": config},
+                upsert=True
+            )
+            
+            # Update system settings
+            await db.system_settings.update_one(
+                {},
+                {"$set": {"quickbooks_configured": True}}
+            )
+            
+            # Redirect to settings page
+            frontend_url = os.environ.get("REACT_APP_BACKEND_URL", "").replace("/api", "")
+            return {"message": "QuickBooks connected successfully", "redirect": f"{frontend_url}/settings?tab=integrations"}
+            
+    except Exception as e:
+        logger.error(f"QuickBooks OAuth error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/integrations/quickbooks/disconnect")
+async def disconnect_quickbooks(user: dict = Depends(require_auth)):
+    """Disconnect QuickBooks integration"""
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    await db.quickbooks_config.update_one(
+        {},
+        {"$set": {
+            "is_connected": False,
+            "access_token": None,
+            "refresh_token": None,
+            "updated_at": datetime.now(timezone.utc)
+        }}
+    )
+    
+    await db.system_settings.update_one(
+        {},
+        {"$set": {"quickbooks_configured": False}}
+    )
+    
+    return {"message": "QuickBooks disconnected"}
+
+@api_router.post("/integrations/quickbooks/sync")
+async def trigger_quickbooks_sync(data: dict, user: dict = Depends(require_auth)):
+    """Trigger a QuickBooks sync operation"""
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    settings = await get_system_settings()
+    if not settings.quickbooks_enabled:
+        raise HTTPException(status_code=400, detail="QuickBooks integration is disabled")
+    
+    config = await db.quickbooks_config.find_one({})
+    if not config or not config.get("is_connected"):
+        raise HTTPException(status_code=400, detail="QuickBooks is not connected")
+    
+    sync_type = data.get("sync_type", "full")  # "full", "invoices", "payments", "customers"
+    
+    # Create sync log
+    sync_log = {
+        "id": str(uuid.uuid4()),
+        "sync_type": sync_type,
+        "direction": "bidirectional",
+        "status": "started",
+        "items_synced": 0,
+        "items_failed": 0,
+        "errors": [],
+        "started_at": datetime.now(timezone.utc)
+    }
+    await db.quickbooks_sync_logs.insert_one(sync_log)
+    
+    # TODO: Implement actual sync logic when QuickBooks is connected
+    # For now, return the sync log ID for tracking
+    
+    return {
+        "message": "Sync started",
+        "sync_id": sync_log["id"],
+        "note": "QuickBooks sync requires valid OAuth connection. Configure credentials in environment variables."
+    }
+
+@api_router.get("/integrations/quickbooks/sync-logs")
+async def get_quickbooks_sync_logs(user: dict = Depends(require_auth), limit: int = 10):
+    """Get QuickBooks sync history"""
+    logs = await db.quickbooks_sync_logs.find(
+        {},
+        {"_id": 0}
+    ).sort("started_at", -1).limit(limit).to_list(limit)
+    
+    return logs
+
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
