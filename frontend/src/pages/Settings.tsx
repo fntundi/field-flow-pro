@@ -81,6 +81,28 @@ export default function Settings() {
     },
   });
 
+  const syncQuickbooksMutation = useMutation({
+    mutationFn: (syncType: string) => quickbooksApi.triggerSync({ sync_type: syncType }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["quickbooksStatus"] });
+      toast.success("QuickBooks sync started");
+    },
+    onError: () => {
+      toast.error("Failed to start sync");
+    },
+  });
+
+  const disconnectQuickbooksMutation = useMutation({
+    mutationFn: () => quickbooksApi.disconnect(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["quickbooksStatus"] });
+      toast.success("QuickBooks disconnected");
+    },
+    onError: () => {
+      toast.error("Failed to disconnect QuickBooks");
+    },
+  });
+
   const handleToggle = (key: keyof SystemSettings, value: boolean) => {
     updateSettingsMutation.mutate({ [key]: value });
   };
