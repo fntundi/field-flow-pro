@@ -2312,6 +2312,1099 @@ async def get_jload_calculations_for_job(job_id: str):
         "manual_j_calculations": manual_calcs
     }
 
+# ==================== GOOGLE MAPS ROUTING API ====================
+
+def get_google_maps_client():
+    """Get Google Maps client if API key is configured"""
+    api_key = os.environ.get("GOOGLE_MAPS_API_KEY")
+    if not api_key:
+        return None
+    return googlemaps.Client(key=api_key)
+
+@api_router.get("/maps/config")
+async def get_maps_config():
+    """Check if Google Maps is configured"""
+    api_key = os.environ.get("GOOGLE_MAPS_API_KEY")
+    return {
+        "configured": bool(api_key),
+        "message": "Google Maps API is configured" if api_key else "Google Maps API key not set. Add GOOGLE_MAPS_API_KEY to backend/.env"
+    }
+
+@api_router.post("/maps/route", response_model=RouteCalculation)
+async def calculate_route(request: RouteRequest):
+    """Calculate route between two points using Google Maps"""
+    gmaps = get_google_maps_client()
+    
+    if not gmaps:
+        # Fallback to Haversine calculation if no API key
+        return await calculate_route_fallback(request)
+    
+    try:
+        # Call Google Maps Directions API
+        directions_result = gmaps.directions(
+            request.origin,
+            request.destination,
+            mode="driving",
+            departure_time="now" if not request.departure_time else request.departure_time,
+            traffic_model="best_guess"
+        )
+        
+        if not directions_result:
+            raise HTTPException(status_code=404, detail="No route found")
+        
+        route = directions_result[0]
+        leg = route["legs"][0]
+        
+        # Extract data
+        distance_meters = leg["distance"]["value"]
+        duration_seconds = leg["duration"]["value"]
+        duration_in_traffic = leg.get("duration_in_traffic", {}).get("value")
+        
+        result = RouteCalculation(
+            origin_address=leg["start_address"],
+            origin_lat=leg["start_location"]["lat"],
+            origin_lng=leg["start_location"]["lng"],
+            destination_address=leg["end_address"],
+            destination_lat=leg["end_location"]["lat"],
+            destination_lng=leg["end_location"]["lng"],
+            distance_meters=distance_meters,
+            distance_miles=round(distance_meters / 1609.34, 2),
+            duration_seconds=duration_seconds,
+            duration_minutes=round(duration_seconds / 60, 1),
+            duration_in_traffic_seconds=duration_in_traffic,
+            duration_in_traffic_minutes=round(duration_in_traffic / 60, 1) if duration_in_traffic else None,
+            polyline=route["overview_polyline"]["points"],
+            summary=route.get("summary", ""),
+            warnings=route.get("warnings", []),
+            api_status="OK"
+        )
+        
+        # Store in database for analytics
+        await db.route_calculations.insert_one(result.dict())
+        
+        return result
+        
+    except googlemaps.exceptions.ApiError as e:
+        logger.error(f"Google Maps API error: {e}")
+        return await calculate_route_fallback(request)
+
+async def calculate_route_fallback(request: RouteRequest):
+    """Fallback route calculation using Haversine formula"""
+    # Try to parse coordinates from origin/destination
+    def parse_coords(s):
+        parts = s.split(",")
+        if len(parts) == 2:
+            try:
+                return float(parts[0].strip()), float(parts[1].strip())
+            except:
+                pass
+        return None, None
+    
+    origin_lat, origin_lng = parse_coords(request.origin)
+    dest_lat, dest_lng = parse_coords(request.destination)
+    
+    if origin_lat and dest_lat:
+        # Haversine calculation
+        R = 3959  # Earth radius in miles
+        lat1, lat2 = math.radians(origin_lat), math.radians(dest_lat)
+        dlat = math.radians(dest_lat - origin_lat)
+        dlng = math.radians(dest_lng - origin_lng)
+        
+        a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlng/2)**2
+        c = 2 * math.asin(math.sqrt(a))
+        distance_miles = R * c
+        
+        # Estimate time at 30 mph average
+        duration_minutes = distance_miles / 30 * 60
+        
+        return RouteCalculation(
+            origin_address=request.origin,
+            origin_lat=origin_lat,
+            origin_lng=origin_lng,
+            destination_address=request.destination,
+            destination_lat=dest_lat,
+            destination_lng=dest_lng,
+            distance_meters=int(distance_miles * 1609.34),
+            distance_miles=round(distance_miles, 2),
+            duration_seconds=int(duration_minutes * 60),
+            duration_minutes=round(duration_minutes, 1),
+            api_status="FALLBACK_HAVERSINE"
+        )
+    
+    # Can't calculate without coordinates
+    return RouteCalculation(
+        origin_address=request.origin,
+        destination_address=request.destination,
+        api_status="FALLBACK_NO_COORDS"
+    )
+
+@api_router.post("/maps/geocode")
+async def geocode_address(address: str):
+    """Convert address to coordinates"""
+    gmaps = get_google_maps_client()
+    
+    if not gmaps:
+        return {"error": "Google Maps API not configured"}
+    
+    try:
+        result = gmaps.geocode(address)
+        if result:
+            location = result[0]["geometry"]["location"]
+            return {
+                "address": result[0]["formatted_address"],
+                "lat": location["lat"],
+                "lng": location["lng"]
+            }
+        return {"error": "Address not found"}
+    except Exception as e:
+        return {"error": str(e)}
+
+# ==================== MAINTENANCE AGREEMENTS API ====================
+
+@api_router.get("/maintenance/templates", response_model=List[MaintenanceAgreementTemplate])
+async def get_maintenance_templates():
+    """Get all maintenance agreement templates"""
+    templates = await db.maintenance_templates.find({"is_active": True}).to_list(100)
+    # Exclude _id
+    for t in templates:
+        t.pop("_id", None)
+    return [MaintenanceAgreementTemplate(**t) for t in templates]
+
+@api_router.post("/maintenance/templates", response_model=MaintenanceAgreementTemplate)
+async def create_maintenance_template(data: dict):
+    """Create a maintenance agreement template"""
+    template = MaintenanceAgreementTemplate(**data)
+    await db.maintenance_templates.insert_one(template.dict())
+    return template
+
+@api_router.get("/maintenance/agreements", response_model=List[MaintenanceAgreement])
+async def get_maintenance_agreements(
+    status: Optional[str] = None,
+    customer_name: Optional[str] = None
+):
+    """Get all maintenance agreements"""
+    query = {}
+    if status:
+        query["status"] = status
+    if customer_name:
+        query["customer_name"] = {"$regex": customer_name, "$options": "i"}
+    
+    agreements = await db.maintenance_agreements.find(query).sort("created_at", -1).to_list(100)
+    for a in agreements:
+        a.pop("_id", None)
+    return [MaintenanceAgreement(**a) for a in agreements]
+
+@api_router.get("/maintenance/agreements/{agreement_id}", response_model=MaintenanceAgreement)
+async def get_maintenance_agreement(agreement_id: str):
+    """Get a specific maintenance agreement"""
+    if not validate_uuid(agreement_id):
+        raise HTTPException(status_code=400, detail="Invalid agreement ID")
+    
+    agreement = await db.maintenance_agreements.find_one({"id": agreement_id})
+    if not agreement:
+        raise HTTPException(status_code=404, detail="Agreement not found")
+    
+    agreement.pop("_id", None)
+    return MaintenanceAgreement(**agreement)
+
+@api_router.post("/maintenance/agreements", response_model=MaintenanceAgreement)
+async def create_maintenance_agreement(data: MaintenanceAgreementCreate):
+    """Create a new maintenance agreement"""
+    # Calculate end date if not provided
+    start = datetime.fromisoformat(data.start_date)
+    if not data.end_date:
+        end_date = (start + timedelta(days=365)).isoformat()[:10]
+    else:
+        end_date = data.end_date
+    
+    # Get template info if provided
+    template_name = None
+    if data.template_id:
+        template = await db.maintenance_templates.find_one({"id": data.template_id})
+        template_name = template["name"] if template else None
+    
+    # Calculate next service date based on frequency
+    if data.frequency == "monthly":
+        next_service = start + timedelta(days=30)
+    elif data.frequency == "quarterly":
+        next_service = start + timedelta(days=90)
+    elif data.frequency == "semi_annual":
+        next_service = start + timedelta(days=180)
+    else:  # annual
+        next_service = start + timedelta(days=365)
+    
+    agreement = MaintenanceAgreement(
+        customer_name=sanitize_string(data.customer_name, 200),
+        customer_email=data.customer_email,
+        customer_phone=data.customer_phone,
+        service_address=sanitize_string(data.service_address, 500),
+        template_id=data.template_id,
+        template_name=template_name,
+        frequency=data.frequency,
+        equipment=data.equipment,
+        start_date=data.start_date,
+        end_date=end_date,
+        next_service_date=next_service.isoformat()[:10],
+        annual_price=data.annual_price,
+        payment_frequency=data.payment_frequency,
+        auto_renew=data.auto_renew,
+        notes=data.notes
+    )
+    
+    await db.maintenance_agreements.insert_one(agreement.dict())
+    return agreement
+
+@api_router.put("/maintenance/agreements/{agreement_id}", response_model=MaintenanceAgreement)
+async def update_maintenance_agreement(agreement_id: str, data: dict):
+    """Update a maintenance agreement"""
+    if not validate_uuid(agreement_id):
+        raise HTTPException(status_code=400, detail="Invalid agreement ID")
+    
+    agreement = await db.maintenance_agreements.find_one({"id": agreement_id})
+    if not agreement:
+        raise HTTPException(status_code=404, detail="Agreement not found")
+    
+    data["updated_at"] = datetime.utcnow()
+    await db.maintenance_agreements.update_one({"id": agreement_id}, {"$set": data})
+    
+    updated = await db.maintenance_agreements.find_one({"id": agreement_id})
+    updated.pop("_id", None)
+    return MaintenanceAgreement(**updated)
+
+@api_router.post("/maintenance/agreements/{agreement_id}/generate-jobs")
+async def generate_maintenance_jobs(agreement_id: str):
+    """Generate scheduled maintenance jobs for an agreement"""
+    if not validate_uuid(agreement_id):
+        raise HTTPException(status_code=400, detail="Invalid agreement ID")
+    
+    agreement = await db.maintenance_agreements.find_one({"id": agreement_id})
+    if not agreement:
+        raise HTTPException(status_code=404, detail="Agreement not found")
+    
+    # Calculate dates for jobs based on frequency
+    start = datetime.fromisoformat(agreement["start_date"])
+    end = datetime.fromisoformat(agreement["end_date"])
+    frequency = agreement["frequency"]
+    
+    if frequency == "monthly":
+        interval = timedelta(days=30)
+    elif frequency == "quarterly":
+        interval = timedelta(days=90)
+    elif frequency == "semi_annual":
+        interval = timedelta(days=180)
+    else:  # annual
+        interval = timedelta(days=365)
+    
+    job_ids = []
+    current_date = start
+    
+    while current_date <= end:
+        # Create a job for each scheduled visit
+        job_number = f"MA-{agreement['agreement_number'][-8:]}-{len(job_ids)+1:02d}"
+        
+        job = Job(
+            job_number=job_number,
+            customer_name=agreement["customer_name"],
+            customer_phone=agreement.get("customer_phone"),
+            customer_email=agreement.get("customer_email"),
+            site_address=agreement["service_address"],
+            type="service",
+            category="maintenance",
+            status="scheduled",
+            priority="normal",
+            scheduled_date=current_date.isoformat()[:10],
+            estimated_duration=2.0,  # 2 hours default
+            notes=f"Scheduled maintenance per agreement {agreement['agreement_number']}",
+            maintenance_agreement_id=agreement_id
+        )
+        
+        await db.jobs.insert_one(job.dict())
+        job_ids.append(job.id)
+        
+        current_date += interval
+    
+    # Update agreement with generated job IDs
+    await db.maintenance_agreements.update_one(
+        {"id": agreement_id},
+        {"$set": {"generated_job_ids": job_ids, "updated_at": datetime.utcnow()}}
+    )
+    
+    return {"message": f"Generated {len(job_ids)} maintenance jobs", "job_ids": job_ids}
+
+@api_router.get("/maintenance/due-renewals")
+async def get_due_renewals(days: int = 30):
+    """Get agreements due for renewal in the next N days"""
+    cutoff = (datetime.utcnow() + timedelta(days=days)).isoformat()[:10]
+    
+    agreements = await db.maintenance_agreements.find({
+        "status": "active",
+        "auto_renew": True,
+        "end_date": {"$lte": cutoff}
+    }).to_list(100)
+    
+    for a in agreements:
+        a.pop("_id", None)
+    
+    return agreements
+
+# ==================== GANTT / INSTALL PROJECTS API ====================
+
+@api_router.get("/projects", response_model=List[InstallProject])
+async def get_install_projects(
+    status: Optional[str] = None,
+    job_id: Optional[str] = None
+):
+    """Get all install projects"""
+    query = {}
+    if status:
+        query["status"] = status
+    if job_id:
+        query["job_id"] = job_id
+    
+    projects = await db.install_projects.find(query).sort("planned_start_date", 1).to_list(100)
+    for p in projects:
+        p.pop("_id", None)
+    return [InstallProject(**p) for p in projects]
+
+@api_router.get("/projects/{project_id}", response_model=InstallProject)
+async def get_install_project(project_id: str):
+    """Get a specific install project"""
+    if not validate_uuid(project_id):
+        raise HTTPException(status_code=400, detail="Invalid project ID")
+    
+    project = await db.install_projects.find_one({"id": project_id})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    project.pop("_id", None)
+    return InstallProject(**project)
+
+@api_router.post("/projects", response_model=InstallProject)
+async def create_install_project(data: InstallProjectCreate):
+    """Create a new install project"""
+    project = InstallProject(
+        job_id=data.job_id,
+        name=sanitize_string(data.name, 200),
+        description=data.description,
+        customer_name=sanitize_string(data.customer_name, 200),
+        site_address=sanitize_string(data.site_address, 500),
+        planned_start_date=data.planned_start_date,
+        planned_end_date=data.planned_end_date,
+        estimated_hours=data.estimated_hours,
+        estimated_cost=data.estimated_cost,
+        notes=data.notes
+    )
+    
+    await db.install_projects.insert_one(project.dict())
+    
+    # Update the parent job to link to this project
+    await db.jobs.update_one(
+        {"id": data.job_id},
+        {"$set": {"install_project_id": project.id, "type": "install"}}
+    )
+    
+    return project
+
+@api_router.put("/projects/{project_id}", response_model=InstallProject)
+async def update_install_project(project_id: str, data: dict):
+    """Update an install project"""
+    if not validate_uuid(project_id):
+        raise HTTPException(status_code=400, detail="Invalid project ID")
+    
+    project = await db.install_projects.find_one({"id": project_id})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    data["updated_at"] = datetime.utcnow()
+    
+    # Recalculate percent complete if phases updated
+    if "phases" in data:
+        phases = data["phases"]
+        if phases:
+            total_percent = sum(p.get("percent_complete", 0) for p in phases) / len(phases)
+            data["percent_complete"] = int(total_percent)
+    
+    await db.install_projects.update_one({"id": project_id}, {"$set": data})
+    
+    updated = await db.install_projects.find_one({"id": project_id})
+    updated.pop("_id", None)
+    return InstallProject(**updated)
+
+@api_router.post("/projects/{project_id}/phases", response_model=ProjectPhase)
+async def add_project_phase(project_id: str, data: ProjectPhaseCreate):
+    """Add a phase to an install project"""
+    if not validate_uuid(project_id):
+        raise HTTPException(status_code=400, detail="Invalid project ID")
+    
+    project = await db.install_projects.find_one({"id": project_id})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Calculate duration
+    start = datetime.fromisoformat(data.start_date)
+    end = datetime.fromisoformat(data.end_date)
+    duration = (end - start).days + 1
+    
+    phase = ProjectPhase(
+        name=sanitize_string(data.name, 200),
+        description=data.description,
+        start_date=data.start_date,
+        end_date=data.end_date,
+        duration_days=duration,
+        depends_on=data.depends_on,
+        assigned_technician_ids=data.assigned_technician_ids,
+        color=data.color
+    )
+    
+    phases = project.get("phases", [])
+    phases.append(phase.dict())
+    
+    await db.install_projects.update_one(
+        {"id": project_id},
+        {"$set": {"phases": phases, "updated_at": datetime.utcnow()}}
+    )
+    
+    return phase
+
+@api_router.put("/projects/{project_id}/phases/{phase_id}")
+async def update_project_phase(project_id: str, phase_id: str, data: dict):
+    """Update a phase within a project"""
+    if not validate_uuid(project_id) or not validate_uuid(phase_id):
+        raise HTTPException(status_code=400, detail="Invalid ID")
+    
+    project = await db.install_projects.find_one({"id": project_id})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    phases = project.get("phases", [])
+    updated = False
+    
+    for i, phase in enumerate(phases):
+        if phase.get("id") == phase_id:
+            phases[i] = {**phase, **data}
+            updated = True
+            break
+    
+    if not updated:
+        raise HTTPException(status_code=404, detail="Phase not found")
+    
+    # Recalculate project percent complete
+    total_percent = sum(p.get("percent_complete", 0) for p in phases) / len(phases) if phases else 0
+    
+    await db.install_projects.update_one(
+        {"id": project_id},
+        {"$set": {"phases": phases, "percent_complete": int(total_percent), "updated_at": datetime.utcnow()}}
+    )
+    
+    return {"message": "Phase updated"}
+
+@api_router.get("/projects/gantt-data/{project_id}")
+async def get_gantt_data(project_id: str):
+    """Get project data formatted for Gantt chart display"""
+    if not validate_uuid(project_id):
+        raise HTTPException(status_code=400, detail="Invalid project ID")
+    
+    project = await db.install_projects.find_one({"id": project_id})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    project.pop("_id", None)
+    
+    # Get technician names for assignment
+    tech_ids = project.get("assigned_technician_ids", [])
+    for phase in project.get("phases", []):
+        tech_ids.extend(phase.get("assigned_technician_ids", []))
+    
+    techs = await db.technicians.find({"id": {"$in": list(set(tech_ids))}}).to_list(50)
+    tech_map = {t["id"]: t["name"] for t in techs}
+    
+    # Format for Gantt
+    gantt_data = {
+        "project": {
+            "id": project["id"],
+            "name": project["name"],
+            "start": project["planned_start_date"],
+            "end": project["planned_end_date"],
+            "progress": project.get("percent_complete", 0)
+        },
+        "phases": [],
+        "resources": [{"id": tid, "name": tech_map.get(tid, "Unknown")} for tid in set(tech_ids)]
+    }
+    
+    for phase in project.get("phases", []):
+        gantt_data["phases"].append({
+            "id": phase["id"],
+            "name": phase["name"],
+            "start": phase["start_date"],
+            "end": phase["end_date"],
+            "duration": phase.get("duration_days", 1),
+            "progress": phase.get("percent_complete", 0),
+            "dependencies": phase.get("depends_on", []),
+            "resources": [tech_map.get(tid, "Unknown") for tid in phase.get("assigned_technician_ids", [])],
+            "color": phase.get("color"),
+            "status": phase.get("status", "not_started")
+        })
+    
+    return gantt_data
+
+# ==================== CUSTOMER PORTAL API ====================
+
+def hash_password(password: str) -> str:
+    """Hash password using SHA-256 with salt"""
+    salt = secrets.token_hex(16)
+    hash_obj = hashlib.sha256((password + salt).encode())
+    return f"{salt}:{hash_obj.hexdigest()}"
+
+def verify_password(password: str, stored_hash: str) -> bool:
+    """Verify password against stored hash"""
+    if not stored_hash or ":" not in stored_hash:
+        return False
+    salt, hash_val = stored_hash.split(":", 1)
+    hash_obj = hashlib.sha256((password + salt).encode())
+    return hash_obj.hexdigest() == hash_val
+
+def generate_token() -> str:
+    """Generate a secure random token"""
+    return secrets.token_urlsafe(32)
+
+@api_router.post("/customer/register")
+async def register_customer(data: CustomerAccountCreate):
+    """Register a new customer account"""
+    # Check if email already exists
+    existing = await db.customer_accounts.find_one({"email": data.email.lower()})
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    # Create account
+    account = CustomerAccount(
+        email=data.email.lower(),
+        password_hash=hash_password(data.password) if data.password else None,
+        name=sanitize_string(data.name, 200),
+        phone=data.phone,
+        addresses=[{"address": data.address, "is_primary": True}] if data.address else [],
+        verification_token=generate_token(),
+        verification_token_expires=datetime.utcnow() + timedelta(hours=24)
+    )
+    
+    await db.customer_accounts.insert_one(account.dict())
+    
+    # In production, send verification email here
+    
+    return {
+        "message": "Account created. Please verify your email.",
+        "customer_id": account.id,
+        "verification_token": account.verification_token  # For demo - remove in production
+    }
+
+@api_router.post("/customer/login")
+async def login_customer(data: CustomerLogin):
+    """Login customer with email/password"""
+    account = await db.customer_accounts.find_one({"email": data.email.lower()})
+    
+    if not account:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    
+    if account.get("status") != "active":
+        raise HTTPException(status_code=401, detail="Account is not active")
+    
+    if data.password:
+        if not verify_password(data.password, account.get("password_hash", "")):
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+    else:
+        raise HTTPException(status_code=400, detail="Password required")
+    
+    # Generate session token
+    session_token = generate_token()
+    
+    # Update last login
+    await db.customer_accounts.update_one(
+        {"id": account["id"]},
+        {"$set": {"last_login": datetime.utcnow(), "session_token": session_token}}
+    )
+    
+    account.pop("_id", None)
+    account.pop("password_hash", None)
+    
+    return {
+        "message": "Login successful",
+        "token": session_token,
+        "customer": {
+            "id": account["id"],
+            "name": account["name"],
+            "email": account["email"]
+        }
+    }
+
+@api_router.post("/customer/magic-link")
+async def request_magic_link(data: MagicLinkRequest):
+    """Send a magic link for passwordless login"""
+    account = await db.customer_accounts.find_one({"email": data.email.lower()})
+    
+    if not account:
+        # Don't reveal if account exists
+        return {"message": "If an account exists, a login link will be sent."}
+    
+    # Generate magic link token
+    token = generate_token()
+    expires = datetime.utcnow() + timedelta(minutes=15)
+    
+    await db.customer_accounts.update_one(
+        {"id": account["id"]},
+        {"$set": {"magic_link_token": token, "magic_link_expires": expires}}
+    )
+    
+    # In production, send email with magic link here
+    # The link would be: https://yourapp.com/customer/verify-magic?token={token}
+    
+    return {
+        "message": "If an account exists, a login link will be sent.",
+        "token": token  # For demo - remove in production
+    }
+
+@api_router.post("/customer/verify-magic/{token}")
+async def verify_magic_link(token: str):
+    """Verify magic link and login"""
+    account = await db.customer_accounts.find_one({
+        "magic_link_token": token,
+        "magic_link_expires": {"$gt": datetime.utcnow()}
+    })
+    
+    if not account:
+        raise HTTPException(status_code=401, detail="Invalid or expired link")
+    
+    # Generate session token
+    session_token = generate_token()
+    
+    # Clear magic link and update login
+    await db.customer_accounts.update_one(
+        {"id": account["id"]},
+        {"$set": {
+            "magic_link_token": None,
+            "magic_link_expires": None,
+            "email_verified": True,
+            "last_login": datetime.utcnow(),
+            "session_token": session_token
+        }}
+    )
+    
+    return {
+        "message": "Login successful",
+        "token": session_token,
+        "customer": {
+            "id": account["id"],
+            "name": account["name"],
+            "email": account["email"]
+        }
+    }
+
+@api_router.get("/customer/profile/{customer_id}")
+async def get_customer_profile(customer_id: str, token: Optional[str] = None):
+    """Get customer profile"""
+    if not validate_uuid(customer_id):
+        raise HTTPException(status_code=400, detail="Invalid customer ID")
+    
+    account = await db.customer_accounts.find_one({"id": customer_id})
+    if not account:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    
+    # In production, verify token matches
+    
+    account.pop("_id", None)
+    account.pop("password_hash", None)
+    account.pop("session_token", None)
+    account.pop("magic_link_token", None)
+    account.pop("verification_token", None)
+    
+    return account
+
+@api_router.put("/customer/profile/{customer_id}")
+async def update_customer_profile(customer_id: str, data: dict):
+    """Update customer profile"""
+    if not validate_uuid(customer_id):
+        raise HTTPException(status_code=400, detail="Invalid customer ID")
+    
+    account = await db.customer_accounts.find_one({"id": customer_id})
+    if not account:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    
+    # Don't allow updating sensitive fields
+    safe_fields = ["name", "phone", "addresses", "notification_preferences"]
+    update_data = {k: v for k, v in data.items() if k in safe_fields}
+    update_data["updated_at"] = datetime.utcnow()
+    
+    await db.customer_accounts.update_one({"id": customer_id}, {"$set": update_data})
+    
+    return {"message": "Profile updated"}
+
+@api_router.post("/customer/service-request")
+async def create_service_request(customer_id: str, data: ServiceRequestCreate):
+    """Create a new service request"""
+    account = await db.customer_accounts.find_one({"id": customer_id})
+    if not account:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    
+    request = ServiceRequest(
+        customer_id=customer_id,
+        customer_name=account["name"],
+        customer_email=account["email"],
+        service_type=data.service_type,
+        description=sanitize_string(data.description, 2000),
+        urgency=data.urgency,
+        preferred_dates=data.preferred_dates,
+        preferred_time_of_day=data.preferred_time_of_day,
+        service_address=sanitize_string(data.service_address, 500),
+        access_instructions=data.access_instructions
+    )
+    
+    await db.service_requests.insert_one(request.dict())
+    
+    return {
+        "message": "Service request submitted",
+        "request_number": request.request_number,
+        "request_id": request.id
+    }
+
+@api_router.get("/customer/{customer_id}/service-requests")
+async def get_customer_service_requests(customer_id: str):
+    """Get service requests for a customer"""
+    if not validate_uuid(customer_id):
+        raise HTTPException(status_code=400, detail="Invalid customer ID")
+    
+    requests = await db.service_requests.find(
+        {"customer_id": customer_id}
+    ).sort("created_at", -1).to_list(50)
+    
+    for r in requests:
+        r.pop("_id", None)
+        r.pop("internal_notes", None)
+    
+    return requests
+
+@api_router.get("/customer/{customer_id}/jobs")
+async def get_customer_jobs(customer_id: str):
+    """Get jobs for a customer (by email match)"""
+    account = await db.customer_accounts.find_one({"id": customer_id})
+    if not account:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    
+    # Find jobs by customer email
+    jobs = await db.jobs.find({
+        "customer_email": account["email"]
+    }).sort("created_at", -1).to_list(50)
+    
+    # Return safe subset of job info
+    result = []
+    for job in jobs:
+        result.append({
+            "id": job["id"],
+            "job_number": job["job_number"],
+            "status": job["status"],
+            "type": job.get("type"),
+            "category": job.get("category"),
+            "scheduled_date": job.get("scheduled_date"),
+            "site_address": job.get("site_address"),
+            "description": job.get("description"),
+            "assigned_technician_name": job.get("assigned_technician_name")
+        })
+    
+    return result
+
+@api_router.get("/customer/{customer_id}/agreements")
+async def get_customer_agreements(customer_id: str):
+    """Get maintenance agreements for a customer"""
+    account = await db.customer_accounts.find_one({"id": customer_id})
+    if not account:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    
+    agreements = await db.maintenance_agreements.find({
+        "$or": [
+            {"customer_id": customer_id},
+            {"customer_email": account["email"]}
+        ]
+    }).sort("created_at", -1).to_list(50)
+    
+    for a in agreements:
+        a.pop("_id", None)
+    
+    return agreements
+
+@api_router.get("/service-requests", response_model=List[ServiceRequest])
+async def get_all_service_requests(status: Optional[str] = None):
+    """Get all service requests (admin view)"""
+    query = {}
+    if status:
+        query["status"] = status
+    
+    requests = await db.service_requests.find(query).sort("created_at", -1).to_list(100)
+    for r in requests:
+        r.pop("_id", None)
+    
+    return [ServiceRequest(**r) for r in requests]
+
+@api_router.put("/service-requests/{request_id}/status")
+async def update_service_request_status(request_id: str, status: str, job_id: Optional[str] = None):
+    """Update service request status"""
+    if not validate_uuid(request_id):
+        raise HTTPException(status_code=400, detail="Invalid request ID")
+    
+    request = await db.service_requests.find_one({"id": request_id})
+    if not request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    
+    update_data = {"status": status, "updated_at": datetime.utcnow()}
+    if job_id:
+        update_data["assigned_job_id"] = job_id
+    
+    await db.service_requests.update_one({"id": request_id}, {"$set": update_data})
+    
+    return {"message": f"Status updated to {status}"}
+
+# ==================== OFFLINE SYNC API ====================
+
+@api_router.post("/sync/batch")
+async def sync_offline_changes(batch: SyncBatch):
+    """Sync a batch of offline changes"""
+    results = {
+        "synced": [],
+        "conflicts": [],
+        "failed": []
+    }
+    
+    for change in batch.changes:
+        queue_item = OfflineSyncQueue(
+            client_id=batch.client_id,
+            user_id=batch.user_id,
+            user_type=batch.user_type,
+            operation=change["operation"],
+            entity_type=change["entity_type"],
+            entity_id=change.get("entity_id"),
+            payload=change.get("payload", {}),
+            client_timestamp=datetime.fromisoformat(change["client_timestamp"]) if isinstance(change["client_timestamp"], str) else change["client_timestamp"],
+            server_received_at=datetime.utcnow()
+        )
+        
+        try:
+            # Process based on entity type
+            result = await process_sync_item(queue_item)
+            
+            if result["status"] == "synced":
+                results["synced"].append({
+                    "entity_type": change["entity_type"],
+                    "entity_id": result.get("entity_id"),
+                    "message": result.get("message")
+                })
+                queue_item.status = "synced"
+            elif result["status"] == "conflict":
+                results["conflicts"].append({
+                    "entity_type": change["entity_type"],
+                    "entity_id": change.get("entity_id"),
+                    "conflict_type": result.get("conflict_type"),
+                    "server_data": result.get("server_data"),
+                    "queue_id": queue_item.id
+                })
+                queue_item.status = "conflict"
+                queue_item.conflict_type = result.get("conflict_type")
+                queue_item.conflict_data = result.get("server_data")
+            else:
+                results["failed"].append({
+                    "entity_type": change["entity_type"],
+                    "error": result.get("error")
+                })
+                queue_item.status = "failed"
+                queue_item.last_error = result.get("error")
+        
+        except Exception as e:
+            results["failed"].append({
+                "entity_type": change["entity_type"],
+                "error": str(e)
+            })
+            queue_item.status = "failed"
+            queue_item.last_error = str(e)
+        
+        # Store sync attempt
+        await db.sync_queue.insert_one(queue_item.dict())
+    
+    return results
+
+async def process_sync_item(item: OfflineSyncQueue) -> dict:
+    """Process a single sync item"""
+    entity_type = item.entity_type
+    operation = item.operation
+    entity_id = item.entity_id
+    payload = item.payload
+    
+    # Map entity types to collections
+    collection_map = {
+        "job": "jobs",
+        "task": "tasks",
+        "time_entry": "job_time_entries",
+        "shift": "shift_sessions",
+        "stock_check": "stock_checks",
+        "equipment_usage": "job_equipment_usage"
+    }
+    
+    collection_name = collection_map.get(entity_type)
+    if not collection_name:
+        return {"status": "failed", "error": f"Unknown entity type: {entity_type}"}
+    
+    collection = db[collection_name]
+    
+    if operation == "create":
+        # Check if already exists (duplicate sync)
+        if entity_id:
+            existing = await collection.find_one({"id": entity_id})
+            if existing:
+                return {"status": "synced", "message": "Already exists", "entity_id": entity_id}
+        
+        # Create new
+        if "id" not in payload:
+            payload["id"] = str(uuid.uuid4())
+        payload["created_at"] = datetime.utcnow()
+        
+        await collection.insert_one(payload)
+        return {"status": "synced", "entity_id": payload["id"]}
+    
+    elif operation == "update":
+        if not entity_id:
+            return {"status": "failed", "error": "Entity ID required for update"}
+        
+        existing = await collection.find_one({"id": entity_id})
+        if not existing:
+            return {"status": "conflict", "conflict_type": "deleted", "server_data": None}
+        
+        # Check for concurrent edit (simple version check)
+        server_updated = existing.get("updated_at")
+        client_timestamp = item.client_timestamp
+        
+        if server_updated and client_timestamp:
+            if isinstance(server_updated, str):
+                server_updated = datetime.fromisoformat(server_updated)
+            if server_updated > client_timestamp:
+                # Server has newer version
+                existing.pop("_id", None)
+                return {
+                    "status": "conflict",
+                    "conflict_type": "concurrent_edit",
+                    "server_data": existing
+                }
+        
+        # Apply update
+        payload["updated_at"] = datetime.utcnow()
+        await collection.update_one({"id": entity_id}, {"$set": payload})
+        return {"status": "synced", "entity_id": entity_id}
+    
+    elif operation == "delete":
+        if not entity_id:
+            return {"status": "failed", "error": "Entity ID required for delete"}
+        
+        result = await collection.delete_one({"id": entity_id})
+        if result.deleted_count == 0:
+            return {"status": "synced", "message": "Already deleted"}
+        
+        return {"status": "synced", "entity_id": entity_id}
+    
+    return {"status": "failed", "error": f"Unknown operation: {operation}"}
+
+@api_router.post("/sync/resolve")
+async def resolve_conflict(resolution: ConflictResolution):
+    """Resolve a sync conflict"""
+    queue_item = await db.sync_queue.find_one({"id": resolution.queue_id})
+    if not queue_item:
+        raise HTTPException(status_code=404, detail="Queue item not found")
+    
+    if queue_item["status"] != "conflict":
+        raise HTTPException(status_code=400, detail="Item is not in conflict state")
+    
+    entity_type = queue_item["entity_type"]
+    entity_id = queue_item["entity_id"]
+    
+    collection_map = {
+        "job": "jobs",
+        "task": "tasks",
+        "time_entry": "job_time_entries",
+        "shift": "shift_sessions"
+    }
+    
+    collection = db[collection_map.get(entity_type, entity_type)]
+    
+    if resolution.resolution == "client_wins":
+        # Apply client's version
+        payload = queue_item["payload"]
+        payload["updated_at"] = datetime.utcnow()
+        await collection.update_one({"id": entity_id}, {"$set": payload}, upsert=True)
+    
+    elif resolution.resolution == "merged" and resolution.merged_data:
+        # Apply merged data
+        resolution.merged_data["updated_at"] = datetime.utcnow()
+        await collection.update_one({"id": entity_id}, {"$set": resolution.merged_data}, upsert=True)
+    
+    # server_wins means we do nothing - keep server version
+    
+    # Update queue item
+    await db.sync_queue.update_one(
+        {"id": resolution.queue_id},
+        {"$set": {
+            "status": "synced",
+            "resolution": resolution.resolution,
+            "resolved_at": datetime.utcnow()
+        }}
+    )
+    
+    return {"message": f"Conflict resolved with {resolution.resolution}"}
+
+@api_router.get("/sync/status/{client_id}", response_model=SyncStatus)
+async def get_sync_status(client_id: str):
+    """Get sync status for a client"""
+    pipeline = [
+        {"$match": {"client_id": client_id}},
+        {"$group": {
+            "_id": "$status",
+            "count": {"$sum": 1}
+        }}
+    ]
+    
+    counts = await db.sync_queue.aggregate(pipeline).to_list(10)
+    count_map = {c["_id"]: c["count"] for c in counts}
+    
+    # Get unresolved conflicts
+    conflicts = await db.sync_queue.find({
+        "client_id": client_id,
+        "status": "conflict"
+    }).to_list(50)
+    
+    for c in conflicts:
+        c.pop("_id", None)
+    
+    # Get last sync time
+    last_sync = await db.sync_queue.find_one(
+        {"client_id": client_id, "status": "synced"},
+        sort=[("server_received_at", -1)]
+    )
+    
+    return SyncStatus(
+        client_id=client_id,
+        pending_count=count_map.get("pending", 0),
+        synced_count=count_map.get("synced", 0),
+        conflict_count=count_map.get("conflict", 0),
+        failed_count=count_map.get("failed", 0),
+        last_sync=last_sync["server_received_at"] if last_sync else None,
+        conflicts=conflicts
+    )
+
+@api_router.get("/sync/pending/{client_id}")
+async def get_pending_syncs(client_id: str):
+    """Get pending sync items for retry"""
+    items = await db.sync_queue.find({
+        "client_id": client_id,
+        "status": {"$in": ["pending", "failed"]},
+        "retry_count": {"$lt": 3}
+    }).to_list(100)
+    
+    for item in items:
+        item.pop("_id", None)
+    
+    return items
+
 # ==================== SEED DATA ====================
 
 @api_router.post("/seed")
