@@ -133,6 +133,49 @@ const AppSidebar = ({ isOpen = true, isMobile = false, onClose }: AppSidebarProp
         })}
       </nav>
 
+      {/* User Profile Section */}
+      {user && (
+        <div className={`px-3 py-3 border-t border-sidebar-border ${collapsed && !isMobile ? 'flex justify-center' : ''}`}>
+          <div className={`flex items-center ${collapsed && !isMobile ? '' : 'gap-3'}`}>
+            <Avatar className="h-8 w-8 flex-shrink-0">
+              <AvatarImage src={user.avatar_url} alt={user.name} />
+              <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground text-xs">
+                {user.name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            {(!collapsed || isMobile) && (
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-sidebar-accent-foreground truncate">{user.name}</p>
+                <p className="text-[10px] text-sidebar-muted truncate capitalize">{user.role}</p>
+              </div>
+            )}
+            {(!collapsed || isMobile) && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleLogout}
+                className="h-7 w-7 text-sidebar-muted hover:text-red-400 hover:bg-red-500/10 flex-shrink-0"
+                title="Logout"
+                data-testid="logout-btn"
+              >
+                <LogOut className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+          {collapsed && !isMobile && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleLogout}
+              className="h-7 w-7 mt-2 text-sidebar-muted hover:text-red-400 hover:bg-red-500/10"
+              title="Logout"
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+      )}
+
       {/* Collapse toggle - only on desktop */}
       {!isMobile && (
         <button
