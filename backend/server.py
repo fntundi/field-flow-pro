@@ -7802,14 +7802,264 @@ async def seed_database():
         )
         await db.truck_inventories.insert_one(truck_inv.dict())
     
+    # ===== LEADS =====
+    leads_data = [
+        {"name": "Jennifer Adams", "email": "jadams@email.com", "phone": "(555) 111-0001", "address": "567 Birch St", "city": "Plano", "state": "TX", "source": "Website", "notes": "Interested in new AC system. Current unit is 15 years old."},
+        {"name": "Michael Scott", "email": "mscott@dundermifflin.com", "phone": "(555) 111-0002", "address": "1725 Slough Ave", "city": "Scranton", "state": "TX", "source": "Referral", "notes": "Office HVAC needs evaluation. 5,000 sq ft space."},
+        {"name": "Lisa Park", "email": "lpark@email.com", "phone": "(555) 111-0003", "address": "890 Cedar Ln", "city": "Frisco", "state": "TX", "source": "Google Ads", "notes": "Heat pump inquiry. Looking for energy efficient options."},
+        {"name": "David Kim", "email": "dkim@techstartup.io", "phone": "(555) 111-0004", "address": "222 Innovation Dr", "city": "Richardson", "state": "TX", "source": "Website", "notes": "Server room cooling needed. 24/7 operation."},
+        {"name": "Maria Garcia", "email": "mgarcia@email.com", "phone": "(555) 111-0005", "address": "456 Oak Ridge", "city": "McKinney", "state": "TX", "source": "Home Show", "notes": "New construction, needs full HVAC design."},
+    ]
+    
+    lead_ids = []
+    lead_statuses = ["new", "contacted", "qualified", "proposal_sent", "new"]
+    for i, lead in enumerate(leads_data):
+        lead_doc = {
+            "id": str(uuid.uuid4()),
+            "name": lead["name"],
+            "email": lead["email"],
+            "phone": lead["phone"],
+            "address": lead["address"],
+            "city": lead["city"],
+            "state": lead["state"],
+            "source": lead["source"],
+            "status": lead_statuses[i],
+            "notes": lead["notes"],
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow(),
+        }
+        await db.leads.insert_one(lead_doc)
+        lead_ids.append(lead_doc["id"])
+    
+    # ===== PROPOSALS =====
+    proposals_data = [
+        {"customer_name": "Sarah Mitchell", "customer_id": customer_ids.get("Sarah Mitchell"), "title": "A/C System Repair Options", "total": 1250.00, "status": "sent"},
+        {"customer_name": "Thompson Family", "customer_id": customer_ids.get("Thompson Family"), "title": "Complete System Replacement", "total": 8500.00, "status": "accepted"},
+        {"customer_name": "Metro Office Park", "customer_id": customer_ids.get("Metro Office Park"), "title": "RTU Installation - Building A", "total": 45000.00, "status": "pending"},
+        {"customer_name": "Jennifer Adams", "title": "New AC System Installation", "total": 6500.00, "status": "draft"},
+    ]
+    
+    proposal_ids = []
+    for i, prop in enumerate(proposals_data):
+        proposal = {
+            "id": str(uuid.uuid4()),
+            "proposal_number": f"PROP-{2001 + i}",
+            "customer_name": prop["customer_name"],
+            "customer_id": prop.get("customer_id"),
+            "title": prop["title"],
+            "description": f"Detailed proposal for {prop['title'].lower()}",
+            "line_items": [
+                {"description": "Equipment", "quantity": 1, "unit_price": prop["total"] * 0.6, "total": prop["total"] * 0.6},
+                {"description": "Labor", "quantity": 1, "unit_price": prop["total"] * 0.3, "total": prop["total"] * 0.3},
+                {"description": "Materials", "quantity": 1, "unit_price": prop["total"] * 0.1, "total": prop["total"] * 0.1},
+            ],
+            "subtotal": prop["total"],
+            "tax": prop["total"] * 0.0825,
+            "total": prop["total"] * 1.0825,
+            "status": prop["status"],
+            "valid_until": (datetime.utcnow() + timedelta(days=30)).isoformat(),
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow(),
+        }
+        await db.proposals.insert_one(proposal)
+        proposal_ids.append(proposal["id"])
+    
+    # ===== INVOICES =====
+    invoices_data = [
+        {"customer_name": "Sarah Mitchell", "customer_id": customer_ids.get("Sarah Mitchell"), "job_id": job_ids[0], "total": 450.00, "status": "sent"},
+        {"customer_name": "Acme Corp", "customer_id": customer_ids.get("Acme Corp"), "job_id": job_ids[1], "total": 1850.00, "status": "paid"},
+        {"customer_name": "Green Valley HOA", "customer_id": customer_ids.get("Green Valley HOA"), "job_id": job_ids[5], "total": 375.00, "status": "sent"},
+        {"customer_name": "Dr. Patricia Wong", "customer_id": customer_ids.get("Dr. Patricia Wong"), "job_id": job_ids[6], "total": 625.00, "status": "draft"},
+        {"customer_name": "Thompson Family", "customer_id": customer_ids.get("Thompson Family"), "total": 2550.00, "status": "paid"},
+    ]
+    
+    invoice_ids = []
+    for i, inv in enumerate(invoices_data):
+        invoice = {
+            "id": str(uuid.uuid4()),
+            "invoice_number": f"INV-{3001 + i}",
+            "customer_name": inv["customer_name"],
+            "customer_id": inv.get("customer_id"),
+            "customer_email": customers_data[i % len(customers_data)]["email"],
+            "job_id": inv.get("job_id"),
+            "line_items": [
+                {"description": "Service Call", "quantity": 1, "unit_price": inv["total"] * 0.3, "total": inv["total"] * 0.3},
+                {"description": "Parts & Materials", "quantity": 1, "unit_price": inv["total"] * 0.5, "total": inv["total"] * 0.5},
+                {"description": "Labor", "quantity": 1, "unit_price": inv["total"] * 0.2, "total": inv["total"] * 0.2},
+            ],
+            "subtotal": inv["total"],
+            "tax": inv["total"] * 0.0825,
+            "total": inv["total"] * 1.0825,
+            "status": inv["status"],
+            "due_date": (datetime.utcnow() + timedelta(days=30)).isoformat(),
+            "paid_amount": inv["total"] * 1.0825 if inv["status"] == "paid" else 0,
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow(),
+        }
+        await db.invoices.insert_one(invoice)
+        invoice_ids.append(invoice["id"])
+    
+    # ===== INSTALL PROJECTS =====
+    projects_data = [
+        {"name": "Thompson Complete System Replacement", "customer_name": "Thompson Family", "job_id": job_ids[4], "status": "in_progress", "percent_complete": 35},
+        {"name": "Metro Office RTU Installation", "customer_name": "Metro Office Park", "job_id": job_ids[3], "status": "scheduled", "percent_complete": 0},
+        {"name": "Sunrise HVAC Upgrade Phase 1", "customer_name": "Sunrise Assisted Living", "job_id": job_ids[7], "status": "planning", "percent_complete": 0},
+    ]
+    
+    project_ids = []
+    for i, proj in enumerate(projects_data):
+        project = InstallProject(
+            project_number=f"PROJ-{4001 + i}",
+            job_id=proj["job_id"],
+            name=proj["name"],
+            customer_name=proj["customer_name"],
+            site_address=customers_data[i % len(customers_data)]["address"],
+            status=proj["status"],
+            percent_complete=proj["percent_complete"],
+            planned_start_date=(datetime.utcnow() + timedelta(days=i * 7)).strftime("%Y-%m-%d"),
+            planned_end_date=(datetime.utcnow() + timedelta(days=i * 7 + 14)).strftime("%Y-%m-%d"),
+            estimated_hours=40 + i * 8,
+            estimated_cost=5000 + i * 2500,
+            phases=[
+                ProjectPhase(
+                    name="Phase 1: Preparation",
+                    status="completed" if proj["percent_complete"] > 20 else "pending",
+                    percent_complete=100 if proj["percent_complete"] > 20 else 0,
+                    planned_start_date=(datetime.utcnow() + timedelta(days=i * 7)).strftime("%Y-%m-%d"),
+                    planned_end_date=(datetime.utcnow() + timedelta(days=i * 7 + 3)).strftime("%Y-%m-%d"),
+                ),
+                ProjectPhase(
+                    name="Phase 2: Equipment Installation",
+                    status="in_progress" if proj["percent_complete"] > 20 else "pending",
+                    percent_complete=50 if proj["percent_complete"] > 20 else 0,
+                    planned_start_date=(datetime.utcnow() + timedelta(days=i * 7 + 4)).strftime("%Y-%m-%d"),
+                    planned_end_date=(datetime.utcnow() + timedelta(days=i * 7 + 10)).strftime("%Y-%m-%d"),
+                ),
+                ProjectPhase(
+                    name="Phase 3: Testing & Commissioning",
+                    status="pending",
+                    percent_complete=0,
+                    planned_start_date=(datetime.utcnow() + timedelta(days=i * 7 + 11)).strftime("%Y-%m-%d"),
+                    planned_end_date=(datetime.utcnow() + timedelta(days=i * 7 + 14)).strftime("%Y-%m-%d"),
+                ),
+            ]
+        )
+        await db.projects.insert_one(project.dict())
+        project_ids.append(project.id)
+    
+    # ===== CUSTOMER EQUIPMENT =====
+    equipment_data = [
+        {"customer_id": customer_ids.get("Sarah Mitchell"), "customer_name": "Sarah Mitchell", "equipment_type": "Air Conditioner", "manufacturer": "Carrier", "model": "24ACC636A003", "serial": "2318F12345", "install_date": "2018-06-15"},
+        {"customer_id": customer_ids.get("Sarah Mitchell"), "customer_name": "Sarah Mitchell", "equipment_type": "Gas Furnace", "manufacturer": "Carrier", "model": "59TP6B080V17", "serial": "2318G54321", "install_date": "2018-06-15"},
+        {"customer_id": customer_ids.get("Acme Corp"), "customer_name": "Acme Corp", "equipment_type": "Rooftop Unit", "manufacturer": "Trane", "model": "YCD150B3H0AA", "serial": "R20F98765", "install_date": "2020-03-20"},
+        {"customer_id": customer_ids.get("Acme Corp"), "customer_name": "Acme Corp", "equipment_type": "Rooftop Unit", "manufacturer": "Trane", "model": "YCD150B3H0AA", "serial": "R20F98766", "install_date": "2020-03-20"},
+        {"customer_id": customer_ids.get("Thompson Family"), "customer_name": "Thompson Family", "equipment_type": "Heat Pump", "manufacturer": "Lennox", "model": "XP21-036", "serial": "5621H11111", "install_date": "2011-08-10"},
+        {"customer_id": customer_ids.get("Green Valley HOA"), "customer_name": "Green Valley HOA", "equipment_type": "Air Conditioner", "manufacturer": "Carrier", "model": "38MAQB24R-3", "serial": "2119C22222", "install_date": "2019-05-01"},
+    ]
+    
+    for equip in equipment_data:
+        equipment = {
+            "id": str(uuid.uuid4()),
+            "customer_id": equip["customer_id"],
+            "customer_name": equip["customer_name"],
+            "equipment_type": equip["equipment_type"],
+            "manufacturer": equip["manufacturer"],
+            "model": equip["model"],
+            "serial_number": equip["serial"],
+            "install_date": equip["install_date"],
+            "warranty_expiration": (datetime.strptime(equip["install_date"], "%Y-%m-%d") + timedelta(days=365*5)).strftime("%Y-%m-%d"),
+            "is_in_warranty": datetime.strptime(equip["install_date"], "%Y-%m-%d") + timedelta(days=365*5) > datetime.utcnow(),
+            "site_address": next((c["address"] for c in customers_data if c["name"] == equip["customer_name"]), ""),
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow(),
+        }
+        await db.customer_equipment.insert_one(equipment)
+    
+    # ===== INVENTORY LOCATIONS (Warehouses) =====
+    locations_data = [
+        {"name": "Main Warehouse", "type": "warehouse", "address": "1000 Industrial Blvd, Dallas, TX 75247", "is_primary": True},
+        {"name": "North Branch", "type": "satellite", "address": "500 Commerce Dr, Plano, TX 75024", "is_primary": False},
+        {"name": "Install Staging", "type": "warehouse", "address": "1000 Industrial Blvd, Dallas, TX 75247", "is_primary": False},
+    ]
+    
+    location_ids = []
+    for loc in locations_data:
+        location = {
+            "id": str(uuid.uuid4()),
+            "name": loc["name"],
+            "location_type": loc["type"],
+            "address": loc["address"],
+            "is_primary": loc["is_primary"],
+            "is_active": True,
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow(),
+        }
+        await db.inventory_locations.insert_one(location)
+        location_ids.append(location["id"])
+        
+        # Add stock for each item at this location
+        for item in created_items:
+            stock_qty = random.randint(5, 50) if loc["is_primary"] else random.randint(2, 20)
+            stock = {
+                "id": str(uuid.uuid4()),
+                "location_id": location["id"],
+                "location_name": loc["name"],
+                "item_id": item.id,
+                "item_name": item.name,
+                "sku": item.sku,
+                "quantity": stock_qty,
+                "min_quantity": item.min_stock_threshold,
+                "max_quantity": item.min_stock_threshold * 5,
+                "created_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow(),
+            }
+            await db.inventory_stock.insert_one(stock)
+    
+    # ===== SERVICE AGREEMENTS =====
+    agreements_data = [
+        {"customer_name": "Acme Corp", "customer_id": customer_ids.get("Acme Corp"), "plan": "Premium", "visits_per_year": 4, "price": 2400.00},
+        {"customer_name": "Green Valley HOA", "customer_id": customer_ids.get("Green Valley HOA"), "plan": "Standard", "visits_per_year": 2, "price": 800.00},
+        {"customer_name": "Dr. Patricia Wong", "customer_id": customer_ids.get("Dr. Patricia Wong"), "plan": "Premium", "visits_per_year": 4, "price": 1800.00},
+        {"customer_name": "Sarah Mitchell", "customer_id": customer_ids.get("Sarah Mitchell"), "plan": "Basic", "visits_per_year": 1, "price": 199.00},
+    ]
+    
+    for agr in agreements_data:
+        agreement = {
+            "id": str(uuid.uuid4()),
+            "agreement_number": f"SA-{5001 + agreements_data.index(agr)}",
+            "customer_name": agr["customer_name"],
+            "customer_id": agr["customer_id"],
+            "plan_name": agr["plan"],
+            "visits_per_year": agr["visits_per_year"],
+            "annual_price": agr["price"],
+            "start_date": datetime.utcnow().strftime("%Y-%m-%d"),
+            "end_date": (datetime.utcnow() + timedelta(days=365)).strftime("%Y-%m-%d"),
+            "status": "active",
+            "auto_renew": True,
+            "next_visit_date": (datetime.utcnow() + timedelta(days=90)).strftime("%Y-%m-%d"),
+            "visits_completed": 0,
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow(),
+        }
+        await db.service_agreements.insert_one(agreement)
+    
     return {
         "message": "Demo database seeded successfully",
+        "customers": len(customers_data),
+        "sites": len(sites_data),
         "technicians": len(technicians_data),
         "jobs": len(jobs_data),
         "tasks": len(tasks_data),
         "appointments": len(appointments_data),
         "trucks": len(trucks_data),
         "inventory_items": len(created_items),
+        "leads": len(leads_data),
+        "proposals": len(proposals_data),
+        "invoices": len(invoices_data),
+        "projects": len(projects_data),
+        "equipment": len(equipment_data),
+        "locations": len(locations_data),
+        "service_agreements": len(agreements_data),
         "sample_appointment_token": appointment_tokens[0] if appointment_tokens else None,
     }
 
