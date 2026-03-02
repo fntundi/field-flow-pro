@@ -79,6 +79,17 @@ const CustomerPortal = () => {
   const [serviceRequests, setServiceRequests] = useState<ServiceRequest[]>([]);
   const [jobs, setJobs] = useState<any[]>([]);
   const [agreements, setAgreements] = useState<MaintenanceAgreement[]>([]);
+  const [invoices, setInvoices] = useState<any[]>([]);
+  const [rescheduleRequests, setRescheduleRequests] = useState<RescheduleRequest[]>([]);
+  
+  // Reschedule dialog state
+  const [rescheduleDialogOpen, setRescheduleDialogOpen] = useState(false);
+  const [selectedJobForReschedule, setSelectedJobForReschedule] = useState<any>(null);
+  const [rescheduleForm, setRescheduleForm] = useState({
+    requested_date: "",
+    requested_time_preference: "anytime",
+    reason: "",
+  });
   
   // New request form
   const [newRequestOpen, setNewRequestOpen] = useState(false);
