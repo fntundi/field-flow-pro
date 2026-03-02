@@ -252,17 +252,19 @@ const Dashboard = () => {
             </Button>
           )}
           
-          {/* AI Features Toggle */}
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-muted rounded-lg">
-            <Sparkles className={`w-4 h-4 ${aiEnabled ? "text-purple-500" : "text-muted-foreground"}`} />
-            <Label htmlFor="ai-toggle" className="text-xs cursor-pointer">AI</Label>
-            <Switch
-              id="ai-toggle"
-              checked={aiEnabled}
-              onCheckedChange={setAiEnabled}
-              className="scale-75"
-            />
-          </div>
+          {/* AI Features Toggle - Only visible to Owner/Admin */}
+          {role === "owner" && (
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-muted rounded-lg">
+              <Sparkles className={`w-4 h-4 ${aiEnabled ? "text-purple-500" : "text-muted-foreground"}`} />
+              <Label htmlFor="ai-toggle" className="text-xs cursor-pointer">AI</Label>
+              <Switch
+                id="ai-toggle"
+                checked={aiEnabled}
+                onCheckedChange={setAiEnabled}
+                className="scale-75"
+              />
+            </div>
+          )}
 
           {/* Role Selector */}
           <div className="flex items-center gap-2">
