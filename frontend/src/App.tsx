@@ -35,6 +35,7 @@ import ImportWizard from "@/pages/ImportWizard";
 import Checklists from "@/pages/Checklists";
 import ReportsBuilder from "@/pages/ReportsBuilder";
 import SchedulingBoard from "@/pages/SchedulingBoard";
+import ProjectBilling from "@/pages/ProjectBilling";
 import { Loader2 } from "lucide-react";
 
 const queryClient = new QueryClient();
