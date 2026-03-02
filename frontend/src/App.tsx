@@ -41,6 +41,8 @@ const App = () => (
             <Route path="/leads" element={<Leads />} />
             <Route path="/customers" element={<Customers />} />
             <Route path="/technicians" element={<Technicians />} />
+            <Route path="/technicians/:id" element={<TechnicianDetail />} />
+            <Route path="/appointment/:token" element={<AppointmentConfirmation />} />
             <Route path="/schedule" element={<Schedule />} />
             <Route path="/maintenance" element={<MaintenanceSchedules />} />
             <Route path="/checklists" element={<PlaceholderPage title="Checklists" subtitle="Installation evidence and quality verification" />} />
