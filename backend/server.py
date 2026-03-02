@@ -6621,11 +6621,17 @@ async def migrate_sites_from_jobs():
     # Create sites
     sites_created = 0
     for key, site_data in site_map.items():
-        # Check if site already exists
-        existing = await db.sites.find_one({
-            "customer_id": site_data["customer_id"],
-            "address": {"$regex": f"^{site_data['address']}$", "$options": "i"}
-        })
+        # Check if site already exists - use customer_name if customer_id is None
+        if site_data["customer_id"]:
+            existing = await db.sites.find_one({
+                "customer_id": site_data["customer_id"],
+                "address": {"$regex": f"^{re.escape(site_data['address'])}$", "$options": "i"}
+            })
+        else:
+            existing = await db.sites.find_one({
+                "customer_name": site_data["customer_name"],
+                "address": {"$regex": f"^{re.escape(site_data['address'])}$", "$options": "i"}
+            })
         
         if existing:
             # Update job count on existing site
@@ -6643,8 +6649,11 @@ async def migrate_sites_from_jobs():
         customer_name = site_data.get("customer_name", "Unknown")
         name = f"{customer_name} - Primary" if site_data["job_count"] > 0 else customer_name
         
+        # Generate a placeholder customer_id if none exists
+        customer_id = site_data["customer_id"] or str(uuid.uuid4())
+        
         site = Site(
-            customer_id=site_data["customer_id"],
+            customer_id=customer_id,
             customer_name=site_data.get("customer_name"),
             name=name,
             site_type="residential",  # Default, can be updated later
