@@ -5573,6 +5573,230 @@ async def query_reports(data: dict):
         "total_count": len(results)
     }
 
+# ==================== STRIPE PAYMENTS API ====================
+
+from fastapi import Request
+
+@api_router.post("/payments/checkout/create")
+async def create_checkout_session(data: dict, request: Request):
+    """Create Stripe checkout session for invoice payment"""
+    stripe_key = os.environ.get("STRIPE_API_KEY")
+    if not stripe_key:
+        raise HTTPException(status_code=500, detail="Payment service not configured")
+    
+    invoice_id = data.get("invoice_id")
+    origin_url = data.get("origin_url")
+    
+    if not invoice_id:
+        raise HTTPException(status_code=400, detail="invoice_id required")
+    if not origin_url:
+        raise HTTPException(status_code=400, detail="origin_url required")
+    
+    # Get invoice from database
+    invoice = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    
+    if invoice.get("status") == "paid":
+        raise HTTPException(status_code=400, detail="Invoice already paid")
+    
+    # Get amount from server-side (never from frontend)
+    amount = float(invoice.get("balance_due", invoice.get("total", 0)))
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="Invalid invoice amount")
+    
+    try:
+        from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionRequest
+        
+        # Build webhook URL
+        host_url = str(request.base_url).rstrip('/')
+        webhook_url = f"{host_url}/api/webhook/stripe"
+        
+        stripe_checkout = StripeCheckout(api_key=stripe_key, webhook_url=webhook_url)
+        
+        # Build success/cancel URLs from frontend origin
+        success_url = f"{origin_url}/invoices?payment_success=true&session_id={{CHECKOUT_SESSION_ID}}"
+        cancel_url = f"{origin_url}/invoices?payment_cancelled=true"
+        
+        # Create checkout request
+        checkout_request = CheckoutSessionRequest(
+            amount=amount,
+            currency="usd",
+            success_url=success_url,
+            cancel_url=cancel_url,
+            metadata={
+                "invoice_id": invoice_id,
+                "invoice_number": invoice.get("invoice_number", ""),
+                "customer_email": invoice.get("customer_email", ""),
+            }
+        )
+        
+        session = await stripe_checkout.create_checkout_session(checkout_request)
+        
+        # Create payment transaction record
+        transaction = {
+            "id": str(uuid.uuid4()),
+            "session_id": session.session_id,
+            "invoice_id": invoice_id,
+            "amount": amount,
+            "currency": "usd",
+            "payment_status": "pending",
+            "status": "initiated",
+            "metadata": checkout_request.metadata,
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
+        }
+        await db.payment_transactions.insert_one(transaction)
+        
+        return {
+            "checkout_url": session.url,
+            "session_id": session.session_id,
+        }
+        
+    except Exception as e:
+        logger.error(f"Stripe checkout error: {e}")
+        raise HTTPException(status_code=500, detail=f"Payment service error: {str(e)}")
+
+@api_router.get("/payments/checkout/status/{session_id}")
+async def get_checkout_status(session_id: str):
+    """Get status of a Stripe checkout session"""
+    stripe_key = os.environ.get("STRIPE_API_KEY")
+    if not stripe_key:
+        raise HTTPException(status_code=500, detail="Payment service not configured")
+    
+    try:
+        from emergentintegrations.payments.stripe.checkout import StripeCheckout
+        
+        stripe_checkout = StripeCheckout(api_key=stripe_key, webhook_url="")
+        status_response = await stripe_checkout.get_checkout_status(session_id)
+        
+        # Update transaction in database
+        if status_response.payment_status == "paid":
+            # Check if already processed
+            transaction = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
+            
+            if transaction and transaction.get("payment_status") != "paid":
+                # Update transaction
+                await db.payment_transactions.update_one(
+                    {"session_id": session_id},
+                    {"$set": {
+                        "payment_status": "paid",
+                        "status": "completed",
+                        "updated_at": datetime.now(timezone.utc),
+                    }}
+                )
+                
+                # Update invoice status
+                invoice_id = transaction.get("invoice_id")
+                if invoice_id:
+                    invoice = await db.invoices.find_one({"id": invoice_id})
+                    if invoice:
+                        payment_amount = transaction.get("amount", 0)
+                        new_balance = max(0, invoice.get("balance_due", 0) - payment_amount)
+                        new_status = "paid" if new_balance == 0 else "partial"
+                        
+                        await db.invoices.update_one(
+                            {"id": invoice_id},
+                            {"$set": {
+                                "status": new_status,
+                                "balance_due": new_balance,
+                                "paid_amount": invoice.get("paid_amount", 0) + payment_amount,
+                                "updated_at": datetime.now(timezone.utc),
+                            }}
+                        )
+                        
+                        # Record payment
+                        payment_record = {
+                            "id": str(uuid.uuid4()),
+                            "invoice_id": invoice_id,
+                            "amount": payment_amount,
+                            "payment_method": "card",
+                            "payment_date": datetime.now(timezone.utc).isoformat(),
+                            "reference_number": session_id,
+                            "notes": "Online payment via Stripe",
+                            "created_at": datetime.now(timezone.utc),
+                        }
+                        await db.payments.insert_one(payment_record)
+        
+        elif status_response.status == "expired":
+            await db.payment_transactions.update_one(
+                {"session_id": session_id},
+                {"$set": {
+                    "payment_status": "expired",
+                    "status": "expired",
+                    "updated_at": datetime.now(timezone.utc),
+                }}
+            )
+        
+        return {
+            "status": status_response.status,
+            "payment_status": status_response.payment_status,
+            "amount_total": status_response.amount_total,
+            "currency": status_response.currency,
+            "metadata": status_response.metadata,
+        }
+        
+    except Exception as e:
+        logger.error(f"Stripe status check error: {e}")
+        raise HTTPException(status_code=500, detail=f"Payment service error: {str(e)}")
+
+@api_router.post("/webhook/stripe")
+async def stripe_webhook(request: Request):
+    """Handle Stripe webhooks"""
+    stripe_key = os.environ.get("STRIPE_API_KEY")
+    if not stripe_key:
+        raise HTTPException(status_code=500, detail="Payment service not configured")
+    
+    try:
+        from emergentintegrations.payments.stripe.checkout import StripeCheckout
+        
+        body = await request.body()
+        signature = request.headers.get("Stripe-Signature", "")
+        
+        stripe_checkout = StripeCheckout(api_key=stripe_key, webhook_url="")
+        webhook_response = await stripe_checkout.handle_webhook(body, signature)
+        
+        # Process webhook event
+        if webhook_response.payment_status == "paid":
+            session_id = webhook_response.session_id
+            
+            # Update transaction
+            await db.payment_transactions.update_one(
+                {"session_id": session_id},
+                {"$set": {
+                    "payment_status": "paid",
+                    "status": "completed",
+                    "updated_at": datetime.now(timezone.utc),
+                }}
+            )
+            
+            # Update invoice (same logic as status check)
+            transaction = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
+            if transaction:
+                invoice_id = transaction.get("invoice_id")
+                if invoice_id:
+                    invoice = await db.invoices.find_one({"id": invoice_id})
+                    if invoice and invoice.get("status") != "paid":
+                        payment_amount = transaction.get("amount", 0)
+                        new_balance = max(0, invoice.get("balance_due", 0) - payment_amount)
+                        new_status = "paid" if new_balance == 0 else "partial"
+                        
+                        await db.invoices.update_one(
+                            {"id": invoice_id},
+                            {"$set": {
+                                "status": new_status,
+                                "balance_due": new_balance,
+                                "paid_amount": invoice.get("paid_amount", 0) + payment_amount,
+                                "updated_at": datetime.now(timezone.utc),
+                            }}
+                        )
+        
+        return {"status": "success", "event_id": webhook_response.event_id}
+        
+    except Exception as e:
+        logger.error(f"Stripe webhook error: {e}")
+        raise HTTPException(status_code=500, detail=f"Webhook processing error: {str(e)}")
+
 # ==================== SEED DATA ====================
 
 @api_router.post("/seed")
