@@ -2457,3 +2457,135 @@ class InventoryMovement(BaseModel):
     performed_at: datetime = Field(default_factory=datetime.utcnow)
     
     notes: Optional[str] = None
+
+
+# ==================== PUSH NOTIFICATIONS ====================
+
+class PushSubscription(BaseModel):
+    """Web push notification subscription"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    
+    # Subscription details from browser
+    endpoint: str
+    keys: dict  # {p256dh, auth}
+    
+    # Device info
+    device_type: Optional[str] = None  # "web", "mobile"
+    user_agent: Optional[str] = None
+    
+    # Status
+    is_active: bool = True
+    last_used: Optional[datetime] = None
+    error_count: int = 0
+    
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class NotificationLog(BaseModel):
+    """Log of sent notifications"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    subscription_id: Optional[str] = None
+    
+    # Notification content
+    notification_type: Literal["chat", "job_assignment", "schedule_change", "payment", "system"] = "system"
+    title: str
+    body: str
+    data: Optional[dict] = None
+    
+    # Status
+    status: Literal["pending", "sent", "failed", "clicked"] = "pending"
+    error_message: Optional[str] = None
+    
+    sent_at: Optional[datetime] = None
+    clicked_at: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+# ==================== QUICKBOOKS INTEGRATION ====================
+
+class QuickBooksConfig(BaseModel):
+    """QuickBooks OAuth configuration"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    
+    # OAuth tokens
+    access_token: Optional[str] = None
+    refresh_token: Optional[str] = None
+    realm_id: Optional[str] = None  # QuickBooks company ID
+    token_expires_at: Optional[datetime] = None
+    
+    # Sync settings
+    sync_invoices: bool = True
+    sync_payments: bool = True
+    sync_customers: bool = True
+    
+    # Account mappings
+    income_account_id: Optional[str] = None
+    expense_account_id: Optional[str] = None
+    ar_account_id: Optional[str] = None  # Accounts Receivable
+    
+    # Status
+    is_connected: bool = False
+    last_sync_at: Optional[datetime] = None
+    sync_errors: List[str] = []
+    
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class QuickBooksSyncLog(BaseModel):
+    """Log of QuickBooks sync operations"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    
+    sync_type: Literal["invoice", "payment", "customer", "full"] = "full"
+    direction: Literal["push", "pull", "bidirectional"] = "bidirectional"
+    
+    # Results
+    status: Literal["started", "completed", "failed", "partial"] = "started"
+    items_synced: int = 0
+    items_failed: int = 0
+    errors: List[str] = []
+    
+    started_at: datetime = Field(default_factory=datetime.utcnow)
+    completed_at: Optional[datetime] = None
+
+class QuickBooksEntityMapping(BaseModel):
+    """Mapping between BreezeFlow and QuickBooks entities"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    
+    entity_type: Literal["customer", "invoice", "payment", "item"] = "customer"
+    breezeflow_id: str
+    quickbooks_id: str
+    
+    last_synced_at: datetime = Field(default_factory=datetime.utcnow)
+    sync_status: Literal["synced", "pending", "error"] = "synced"
+    error_message: Optional[str] = None
+
+# ==================== AI PROVIDER CONFIG ====================
+
+class AIProviderConfig(BaseModel):
+    """AI provider configuration for failover"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    
+    # Primary provider
+    primary_provider: Literal["gemini", "openai", "claude"] = "gemini"
+    primary_model: str = "gemini-2.0-flash"
+    
+    # Failover chain
+    failover_providers: List[dict] = [
+        {"provider": "openai", "model": "gpt-4o-mini"},
+        {"provider": "claude", "model": "claude-3-haiku-20240307"}
+    ]
+    
+    # Failover settings
+    failover_enabled: bool = True
+    fallback_to_simple: bool = True  # Use simple summaries if all AI fails
+    max_retries: int = 2
+    
+    # Usage tracking
+    total_requests: int = 0
+    failed_requests: int = 0
+    failover_count: int = 0
+    last_failure_at: Optional[datetime] = None
+    
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_by_id: Optional[str] = None
