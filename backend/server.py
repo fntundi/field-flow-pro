@@ -5494,7 +5494,7 @@ async def query_reports(data: dict):
     }
     
     collection = collection_map.get(data_source)
-    if not collection:
+    if collection is None:
         raise HTTPException(status_code=400, detail=f"Unknown data source: {data_source}")
     
     # Build query
