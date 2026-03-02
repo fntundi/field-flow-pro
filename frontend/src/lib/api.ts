@@ -2303,6 +2303,7 @@ export interface Customer {
   city?: string;
   state?: string;
   zip?: string;
+  customer_type?: string;
   notes?: string;
   created_at?: string;
 }
