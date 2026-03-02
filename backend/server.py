@@ -21,6 +21,7 @@ from passlib.context import CryptContext
 
 from models import (
     User, UserCreate, UserResponse,
+    UserAuth, UserRegister, UserLogin, TokenResponse,
     Technician, TechnicianCreate, TechnicianUpdate, TechnicianPublicProfile,
     Certification, License, WorkHistoryEntry,
     BoardConfig, BoardConfigCreate, BoardConfigUpdate, StatusColumn,
