@@ -2997,3 +2997,121 @@ export const pushApi = {
   getSubscriptions: () =>
     fetchApi<PushSubscriptionInfo[]>('/push/subscriptions'),
 };
+
+
+// ==================== VOIP API ====================
+
+export interface VoIPCallLog {
+  id: string;
+  phone_com_call_id?: string;
+  caller_number: string;
+  called_number: string;
+  direction: 'inbound' | 'outbound';
+  status: 'initiated' | 'ringing' | 'answered' | 'completed' | 'missed' | 'failed' | 'voicemail';
+  duration_seconds: number;
+  start_time?: string;
+  end_time?: string;
+  recording_url?: string;
+  transcription?: string;
+  customer_id?: string;
+  customer_name?: string;
+  job_id?: string;
+  lead_id?: string;
+  technician_id?: string;
+  notes?: string;
+  tags: string[];
+  sentiment?: 'positive' | 'neutral' | 'negative';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VoIPSMS {
+  id: string;
+  from_number: string;
+  to_number: string;
+  message: string;
+  direction: 'inbound' | 'outbound';
+  status: 'pending' | 'sent' | 'delivered' | 'failed' | 'received';
+  customer_id?: string;
+  customer_name?: string;
+  job_id?: string;
+  created_at: string;
+}
+
+export interface VoIPPhoneNumber {
+  id: string;
+  number: string;
+  name?: string;
+  type: 'main' | 'support' | 'sales' | 'technician';
+  is_active: boolean;
+  sms_enabled: boolean;
+}
+
+export interface VoIPStatus {
+  enabled: boolean;
+  provider: string;
+  api_key_configured: boolean;
+  account_id_configured: boolean;
+}
+
+export interface VoIPAnalytics {
+  total_calls: number;
+  inbound_calls: number;
+  outbound_calls: number;
+  completed_calls: number;
+  missed_calls: number;
+  average_duration_seconds: number;
+  total_duration_seconds: number;
+  calls_by_status: Record<string, number>;
+  calls_by_hour: Record<string, number>;
+}
+
+export const voipApi = {
+  getStatus: () => fetchApi<VoIPStatus>('/voip/status'),
+  
+  configure: (data: { api_key: string; account_id: string; webhook_secret?: string }) =>
+    fetchApi<{ message: string }>('/voip/configure', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  
+  getPhoneNumbers: () =>
+    fetchApi<{ numbers: VoIPPhoneNumber[]; demo_mode: boolean }>('/voip/phone-numbers'),
+  
+  initiateCall: (data: { to_number: string; from_number?: string; customer_id?: string; job_id?: string; notes?: string }) =>
+    fetchApi<{ success: boolean; call_id: string; status: string; demo_mode: boolean }>('/voip/calls/initiate', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  
+  getCalls: (params?: { limit?: number; offset?: number; customer_id?: string; job_id?: string; direction?: string }) => {
+    const query = params ? new URLSearchParams(
+      Object.entries(params).filter(([_, v]) => v !== undefined).map(([k, v]) => [k, String(v)])
+    ).toString() : '';
+    return fetchApi<{ calls: VoIPCallLog[]; total: number }>(`/voip/calls${query ? `?${query}` : ''}`);
+  },
+  
+  getCall: (callId: string) => fetchApi<VoIPCallLog>(`/voip/calls/${callId}`),
+  
+  updateCallNotes: (callId: string, data: { notes?: string; tags?: string[] }) =>
+    fetchApi<{ message: string }>(`/voip/calls/${callId}/notes`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  
+  sendSMS: (data: { to_number: string; from_number?: string; message: string; customer_id?: string; job_id?: string }) =>
+    fetchApi<{ success: boolean; message_id: string; status: string; demo_mode: boolean }>('/voip/sms/send', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  
+  getSMS: (params?: { limit?: number; offset?: number; customer_id?: string }) => {
+    const query = params ? new URLSearchParams(
+      Object.entries(params).filter(([_, v]) => v !== undefined).map(([k, v]) => [k, String(v)])
+    ).toString() : '';
+    return fetchApi<{ messages: VoIPSMS[] }>(`/voip/sms${query ? `?${query}` : ''}`);
+  },
+  
+  getAnalytics: (days: number = 30) =>
+    fetchApi<VoIPAnalytics>(`/voip/analytics?days=${days}`),
+};
