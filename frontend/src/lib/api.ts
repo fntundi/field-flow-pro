@@ -2354,3 +2354,256 @@ export const stripePaymentsApi = {
   getCheckoutStatus: (sessionId: string) =>
     fetchApi<CheckoutStatus>(`/payments/checkout/status/${sessionId}`),
 };
+
+
+// ==================== MILESTONE TEMPLATES API ====================
+
+export interface MilestoneTemplate {
+  id: string;
+  name: string;
+  description?: string;
+  milestones: {
+    id: string;
+    name: string;
+    percentage: number;
+    description?: string;
+    trigger: string;
+    trigger_phase_id?: string;
+  }[];
+  is_default: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProjectBillingMilestone {
+  id: string;
+  template_milestone_id?: string;
+  name: string;
+  percentage: number;
+  amount: number;
+  description?: string;
+  status: 'pending' | 'ready_to_bill' | 'invoiced' | 'paid';
+  invoice_id?: string;
+  invoiced_at?: string;
+  paid_at?: string;
+  trigger: string;
+  triggered_at?: string;
+}
+
+export const milestoneTemplatesApi = {
+  getAll: (activeOnly: boolean = true) =>
+    fetchApi<MilestoneTemplate[]>(`/milestone-templates?active_only=${activeOnly}`),
+  
+  get: (id: string) =>
+    fetchApi<MilestoneTemplate>(`/milestone-templates/${id}`),
+  
+  create: (data: Partial<MilestoneTemplate>) =>
+    fetchApi<MilestoneTemplate>('/milestone-templates', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  
+  update: (id: string, data: Partial<MilestoneTemplate>) =>
+    fetchApi<MilestoneTemplate>(`/milestone-templates/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  
+  delete: (id: string) =>
+    fetchApi<{ message: string }>(`/milestone-templates/${id}`, {
+      method: 'DELETE',
+    }),
+};
+
+export const projectBillingApi = {
+  applyTemplate: (projectId: string, templateId: string) =>
+    fetchApi<{ message: string; milestones: ProjectBillingMilestone[] }>(
+      `/projects/${projectId}/apply-template/${templateId}`,
+      { method: 'POST' }
+    ),
+  
+  updateMilestone: (projectId: string, milestoneId: string, data: any) =>
+    fetchApi<{ message: string; milestone: ProjectBillingMilestone }>(
+      `/projects/${projectId}/milestones/${milestoneId}`,
+      { method: 'PUT', body: JSON.stringify(data) }
+    ),
+  
+  invoiceMilestone: (projectId: string, milestoneId: string) =>
+    fetchApi<{ message: string; invoice: any }>(
+      `/projects/${projectId}/milestones/${milestoneId}/invoice`,
+      { method: 'POST' }
+    ),
+};
+
+// ==================== RESCHEDULE REQUESTS API ====================
+
+export interface RescheduleRequest {
+  id: string;
+  request_number: string;
+  job_id: string;
+  job_number: string;
+  customer_id: string;
+  customer_name: string;
+  customer_email: string;
+  original_date: string;
+  original_time?: string;
+  requested_date: string;
+  requested_time_preference?: string;
+  reason?: string;
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+  approved_date?: string;
+  approved_time?: string;
+  rejection_reason?: string;
+  processed_by_id?: string;
+  processed_at?: string;
+  created_at: string;
+}
+
+export const rescheduleRequestsApi = {
+  getAll: (status?: string) =>
+    fetchApi<RescheduleRequest[]>(
+      `/reschedule-requests${status ? `?status=${status}` : ''}`
+    ),
+  
+  create: (data: {
+    job_id: string;
+    customer_id?: string;
+    customer_email?: string;
+    requested_date: string;
+    requested_time_preference?: string;
+    reason?: string;
+  }) =>
+    fetchApi<RescheduleRequest>('/reschedule-requests', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  
+  approve: (id: string, data: { approved_date?: string; approved_time?: string }) =>
+    fetchApi<{ message: string; new_date: string; new_time?: string }>(
+      `/reschedule-requests/${id}/approve`,
+      { method: 'PUT', body: JSON.stringify(data) }
+    ),
+  
+  reject: (id: string, reason?: string) =>
+    fetchApi<{ message: string }>(
+      `/reschedule-requests/${id}/reject`,
+      { method: 'PUT', body: JSON.stringify({ reason }) }
+    ),
+  
+  getByCustomer: (customerId: string) =>
+    fetchApi<RescheduleRequest[]>(`/customer/${customerId}/reschedule-requests`),
+};
+
+// ==================== SUPPORT REQUESTS API ====================
+
+export interface SupportRequest {
+  id: string;
+  request_number: string;
+  customer_id: string;
+  customer_name: string;
+  customer_email: string;
+  request_type: string;
+  subject: string;
+  description: string;
+  service_address?: string;
+  equipment_id?: string;
+  equipment_type?: string;
+  priority: string;
+  status: string;
+  assigned_to_id?: string;
+  job_id?: string;
+  response_notes?: string;
+  created_at: string;
+}
+
+export const supportRequestsApi = {
+  getAll: (status?: string) =>
+    fetchApi<SupportRequest[]>(
+      `/support-requests${status ? `?status=${status}` : ''}`
+    ),
+  
+  create: (customerId: string, data: {
+    request_type?: string;
+    subject: string;
+    description: string;
+    service_address?: string;
+    equipment_id?: string;
+    priority?: string;
+  }) =>
+    fetchApi<SupportRequest>(`/customer/${customerId}/support-request`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  
+  update: (id: string, data: any) =>
+    fetchApi<{ message: string }>(`/support-requests/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+};
+
+// ==================== CUSTOMER PORTAL API ====================
+
+export interface CustomerAccount {
+  id: string;
+  email: string;
+  name: string;
+  phone?: string;
+  addresses: { address: string; is_primary: boolean }[];
+  email_verified: boolean;
+  last_login?: string;
+  notification_preferences: {
+    email_reminders: boolean;
+    sms_reminders: boolean;
+    marketing: boolean;
+  };
+  status: string;
+}
+
+export const customerPortalApi = {
+  register: (data: { email: string; password?: string; name: string; phone?: string; address?: string }) =>
+    fetchApi<{ message: string; customer_id: string; verification_token?: string }>(
+      '/customer/register',
+      { method: 'POST', body: JSON.stringify(data) }
+    ),
+  
+  login: (email: string, password: string) =>
+    fetchApi<{ message: string; token: string; customer: { id: string; name: string; email: string } }>(
+      '/customer/login',
+      { method: 'POST', body: JSON.stringify({ email, password }) }
+    ),
+  
+  requestMagicLink: (email: string) =>
+    fetchApi<{ message: string; token?: string }>(
+      '/customer/magic-link',
+      { method: 'POST', body: JSON.stringify({ email }) }
+    ),
+  
+  verifyMagicLink: (token: string) =>
+    fetchApi<{ message: string; token: string; customer: { id: string; name: string; email: string } }>(
+      `/customer/verify-magic/${token}`,
+      { method: 'POST' }
+    ),
+  
+  getProfile: (customerId: string) =>
+    fetchApi<CustomerAccount>(`/customer/profile/${customerId}`),
+  
+  updateProfile: (customerId: string, data: any) =>
+    fetchApi<{ message: string }>(`/customer/profile/${customerId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  
+  getJobs: (customerId: string) =>
+    fetchApi<any[]>(`/customer/${customerId}/jobs`),
+  
+  getInvoices: (customerId: string) =>
+    fetchApi<any[]>(`/customer/${customerId}/invoices`),
+  
+  getEquipment: (customerId: string) =>
+    fetchApi<any[]>(`/customer/${customerId}/equipment`),
+  
+  getAgreements: (customerId: string) =>
+    fetchApi<any[]>(`/customer/${customerId}/agreements`),
+};
