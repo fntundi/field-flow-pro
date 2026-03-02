@@ -143,16 +143,20 @@ const CustomerPortal = () => {
   const fetchCustomerData = async (customerId: string) => {
     setLoading(true);
     try {
-      const [profile, requests, customerJobs, customerAgreements] = await Promise.all([
+      const [profile, requests, customerJobs, customerAgreements, customerInvoices, customerReschedules] = await Promise.all([
         customerPortalApi.getProfile(customerId),
         customerPortalApi.getServiceRequests(customerId),
         customerPortalApi.getJobs(customerId),
         customerPortalApi.getAgreements(customerId),
+        customerPortalApi.getInvoices(customerId),
+        rescheduleRequestsApi.getByCustomer(customerId),
       ]);
       setCustomer(profile);
       setServiceRequests(requests);
       setJobs(customerJobs);
       setAgreements(customerAgreements);
+      setInvoices(customerInvoices);
+      setRescheduleRequests(customerReschedules);
       setIsLoggedIn(true);
       
       // Set default address for new requests
