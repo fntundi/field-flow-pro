@@ -33,6 +33,45 @@ POStatus = Literal["draft", "submitted", "confirmed", "partial", "received", "ca
 
 # ==================== USER & AUTH ====================
 
+class UserAuth(BaseModel):
+    """User with authentication data"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    email: str
+    name: str
+    password_hash: Optional[str] = None
+    role: RoleType = "technician"
+    is_active: bool = True
+    
+    # OAuth fields
+    google_id: Optional[str] = None
+    auth_provider: Literal["local", "google"] = "local"
+    
+    # Profile
+    avatar_url: Optional[str] = None
+    phone: Optional[str] = None
+    
+    # Linked records
+    technician_id: Optional[str] = None
+    
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    last_login: Optional[datetime] = None
+
+class UserRegister(BaseModel):
+    email: str
+    password: str
+    name: str
+    role: RoleType = "technician"
+
+class UserLogin(BaseModel):
+    email: str
+    password: str
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: dict
+
 class User(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     email: str
