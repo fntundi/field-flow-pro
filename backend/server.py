@@ -6727,8 +6727,76 @@ async def startup_event():
     await ensure_default_board_config()
     await ensure_default_roles()
     await ensure_default_job_types()
+    await ensure_default_milestone_templates()
     await get_system_settings()  # Create default settings if not exists
     logger.info("Application started, default configurations ensured")
+
+async def ensure_default_milestone_templates():
+    """Ensure default milestone templates exist"""
+    count = await db.milestone_templates.count_documents({})
+    if count > 0:
+        return
+    
+    # Create default templates
+    default_templates = [
+        {
+            "id": str(uuid.uuid4()),
+            "name": "Standard Install (30/40/30)",
+            "description": "Standard 3-milestone structure: 30% deposit, 40% at rough-in, 30% on completion",
+            "milestones": [
+                {"id": str(uuid.uuid4()), "name": "Deposit", "percentage": 30, "description": "Due upon contract signing", "trigger": "project_start"},
+                {"id": str(uuid.uuid4()), "name": "Rough-In Complete", "percentage": 40, "description": "Due when rough-in work is complete", "trigger": "manual"},
+                {"id": str(uuid.uuid4()), "name": "Final Payment", "percentage": 30, "description": "Due upon project completion", "trigger": "project_complete"},
+            ],
+            "is_default": True,
+            "is_active": True,
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "name": "Equipment Only (50/50)",
+            "description": "2-milestone structure: 50% deposit, 50% on delivery/install",
+            "milestones": [
+                {"id": str(uuid.uuid4()), "name": "Deposit", "percentage": 50, "description": "Due upon order placement", "trigger": "project_start"},
+                {"id": str(uuid.uuid4()), "name": "Balance", "percentage": 50, "description": "Due on delivery/installation", "trigger": "project_complete"},
+            ],
+            "is_default": False,
+            "is_active": True,
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "name": "Large Project (20/30/30/20)",
+            "description": "4-milestone structure for larger projects",
+            "milestones": [
+                {"id": str(uuid.uuid4()), "name": "Deposit", "percentage": 20, "description": "Due upon contract signing", "trigger": "project_start"},
+                {"id": str(uuid.uuid4()), "name": "Materials Ordered", "percentage": 30, "description": "Due when materials are ordered", "trigger": "manual"},
+                {"id": str(uuid.uuid4()), "name": "Rough-In Complete", "percentage": 30, "description": "Due when rough-in is complete", "trigger": "manual"},
+                {"id": str(uuid.uuid4()), "name": "Final Payment", "percentage": 20, "description": "Due on final inspection", "trigger": "project_complete"},
+            ],
+            "is_default": False,
+            "is_active": True,
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "name": "Full Payment on Completion",
+            "description": "Single payment due on project completion",
+            "milestones": [
+                {"id": str(uuid.uuid4()), "name": "Full Payment", "percentage": 100, "description": "Due upon project completion", "trigger": "project_complete"},
+            ],
+            "is_default": False,
+            "is_active": True,
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
+        },
+    ]
+    
+    await db.milestone_templates.insert_many(default_templates)
+    logger.info(f"Created {len(default_templates)} default milestone templates")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
