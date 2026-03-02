@@ -1,225 +1,451 @@
-import { motion, AnimatePresence } from "framer-motion";
-import StatusBadge from "@/components/StatusBadge";
+import { useState } from "react";
+import { motion } from "framer-motion";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Link } from "react-router-dom";
-import { Plus, Search, Phone, Mail, MapPin, ChevronDown, ChevronRight, Building2, Briefcase, Home } from "lucide-react";
-import { useState } from "react";
+import { Badge } from "@/components/ui/badge";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Plus,
+  Search,
+  Phone,
+  PhoneCall,
+  Mail,
+  MapPin,
+  Building2,
+  Home,
+  Users,
+  Briefcase,
+  Loader2,
+  MessageSquare,
+  ChevronRight,
+} from "lucide-react";
+import { customersApi, sitesApi, voipApi, Customer, Site, Job } from "@/lib/api";
+import { toast } from "sonner";
+import { Link, useNavigate } from "react-router-dom";
 
-interface Site {
-  id: string;
-  name: string;
-  address: string;
-  type: "residential" | "commercial";
-  equipment: string[];
-  activeJobs: number;
-  lastService: string;
-}
-
-interface Customer {
-  id: string;
-  name: string;
-  type: string;
-  phone: string;
-  email: string;
-  totalJobs: number;
-  totalSpent: string;
-  lastService: string;
-  status: "active" | "inactive";
-  agreement: string | null;
-  sites: Site[];
-}
-
-const customers: Customer[] = [
-  {
-    id: "CUST-1001", name: "Sarah Mitchell", type: "Residential", phone: "(214) 555-0142", email: "sarah.m@email.com",
-    totalJobs: 8, totalSpent: "$12,450", lastService: "Feb 27, 2026", status: "active", agreement: "Premium Plan",
-    sites: [
-      { id: "SITE-1001A", name: "Primary Residence", address: "1423 Oak Ave, Dallas, TX", type: "residential", equipment: ["Trane XR15 (3-ton)", "Honeywell T6 Thermostat"], activeJobs: 1, lastService: "Feb 27, 2026" },
-      { id: "SITE-1001B", name: "Rental Property", address: "809 Maple Dr, Plano, TX", type: "residential", equipment: ["Goodman GSX16 (2.5-ton)"], activeJobs: 0, lastService: "Jan 15, 2026" },
-    ],
-  },
-  {
-    id: "CUST-1002", name: "Acme Corp", type: "Commercial", phone: "(972) 555-0198", email: "facilities@acme.com",
-    totalJobs: 24, totalSpent: "$87,200", lastService: "Feb 27, 2026", status: "active", agreement: "Enterprise",
-    sites: [
-      { id: "SITE-1002A", name: "Main Office", address: "500 Commerce St, Dallas, TX", type: "commercial", equipment: ["Carrier 50XC (15-ton)", "Carrier 50XC (10-ton)"], activeJobs: 0, lastService: "Feb 27, 2026" },
-      { id: "SITE-1002B", name: "Warehouse", address: "1200 Industrial Blvd, Dallas, TX", type: "commercial", equipment: ["Lennox LGH (20-ton)"], activeJobs: 1, lastService: "Feb 20, 2026" },
-      { id: "SITE-1002C", name: "Executive Suite", address: "502 Commerce St, Ste 400, Dallas, TX", type: "commercial", equipment: ["Daikin VRV IV (8-ton)"], activeJobs: 0, lastService: "Feb 10, 2026" },
-    ],
-  },
-  {
-    id: "CUST-1003", name: "James Rivera", type: "Residential", phone: "(469) 555-0231", email: "j.rivera@email.com",
-    totalJobs: 3, totalSpent: "$4,890", lastService: "Feb 27, 2026", status: "active", agreement: null,
-    sites: [
-      { id: "SITE-1003A", name: "Home", address: "812 Elm St, Plano, TX", type: "residential", equipment: ["Rheem RA20 (3-ton)"], activeJobs: 1, lastService: "Feb 27, 2026" },
-    ],
-  },
-  {
-    id: "CUST-1004", name: "Metro Office Park", type: "Commercial", phone: "(214) 555-0377", email: "ops@metrooffice.com",
-    totalJobs: 15, totalSpent: "$52,100", lastService: "Feb 25, 2026", status: "active", agreement: "Standard Plan",
-    sites: [
-      { id: "SITE-1004A", name: "Building A", address: "2100 N Central Expy, Richardson, TX", type: "commercial", equipment: ["Lennox XC25 (5-ton)", "York YC2F (10-ton)"], activeJobs: 1, lastService: "Feb 25, 2026" },
-      { id: "SITE-1004B", name: "Building B", address: "2104 N Central Expy, Richardson, TX", type: "commercial", equipment: ["Trane IntelliPak (15-ton)"], activeJobs: 0, lastService: "Feb 18, 2026" },
-    ],
-  },
-  {
-    id: "CUST-1005", name: "David Park", type: "Residential", phone: "(972) 555-0456", email: "d.park@email.com",
-    totalJobs: 5, totalSpent: "$7,320", lastService: "Feb 26, 2026", status: "active", agreement: null,
-    sites: [
-      { id: "SITE-1005A", name: "Home", address: "3301 Mockingbird Ln, Dallas, TX", type: "residential", equipment: ["Carrier Infinity (3.5-ton)"], activeJobs: 0, lastService: "Feb 26, 2026" },
-    ],
-  },
-  {
-    id: "CUST-1006", name: "Linda Hayes", type: "Residential", phone: "(469) 555-0512", email: "linda.h@email.com",
-    totalJobs: 2, totalSpent: "$3,150", lastService: "Feb 26, 2026", status: "active", agreement: "Basic Plan",
-    sites: [
-      { id: "SITE-1006A", name: "Primary Residence", address: "905 Preston Rd, Frisco, TX", type: "residential", equipment: ["Goodman GSX16 (2.5-ton)"], activeJobs: 0, lastService: "Feb 26, 2026" },
-    ],
-  },
-  {
-    id: "CUST-1007", name: "TechHub Offices", type: "Commercial", phone: "(214) 555-0689", email: "admin@techhub.co",
-    totalJobs: 9, totalSpent: "$28,400", lastService: "Feb 24, 2026", status: "inactive", agreement: null,
-    sites: [
-      { id: "SITE-1007A", name: "Suite 200", address: "4400 Beltline Rd, Addison, TX", type: "commercial", equipment: ["York YC2F (10-ton)"], activeJobs: 1, lastService: "Feb 24, 2026" },
-    ],
-  },
-  {
-    id: "CUST-1008", name: "Maria Santos", type: "Residential", phone: "(972) 555-0734", email: "m.santos@email.com",
-    totalJobs: 4, totalSpent: "$6,200", lastService: "Feb 25, 2026", status: "active", agreement: "Premium Plan",
-    sites: [
-      { id: "SITE-1008A", name: "Home", address: "667 Greenville Ave, Dallas, TX", type: "residential", equipment: ["Rheem RA20 (3-ton)"], activeJobs: 0, lastService: "Feb 25, 2026" },
-    ],
-  },
-];
-
-const Customers = () => {
+export default function Customers() {
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
-  const [expandedCustomer, setExpandedCustomer] = useState<string | null>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [detailTab, setDetailTab] = useState("info");
+  const [isCallingCustomer, setIsCallingCustomer] = useState<string | null>(null);
 
-  const filtered = customers.filter(
-    (c) =>
-      c.name.toLowerCase().includes(search.toLowerCase()) ||
-      c.id.toLowerCase().includes(search.toLowerCase()) ||
-      c.email.toLowerCase().includes(search.toLowerCase()) ||
-      c.sites.some((s) => s.address.toLowerCase().includes(search.toLowerCase()))
-  );
+  // Queries
+  const { data: customers = [], isLoading } = useQuery({
+    queryKey: ["customers", search],
+    queryFn: () => customersApi.getAll(search || undefined),
+  });
+
+  const { data: customerSites = [] } = useQuery({
+    queryKey: ["customer-sites", selectedCustomer?.id],
+    queryFn: () => selectedCustomer ? sitesApi.getAll({ customer_id: selectedCustomer.id }) : Promise.resolve([]),
+    enabled: !!selectedCustomer,
+  });
+
+  // Click-to-call handler
+  const handleClickToCall = async (phoneNumber: string, customerId: string, customerName: string) => {
+    setIsCallingCustomer(customerId);
+    try {
+      const result = await voipApi.initiateCall({
+        to_number: phoneNumber,
+        customer_id: customerId,
+        notes: `Call to customer: ${customerName}`,
+      });
+      
+      if (result.success) {
+        toast.success(result.demo_mode 
+          ? `Demo call simulated to ${phoneNumber}` 
+          : `Connecting to ${phoneNumber}`
+        );
+      } else {
+        throw new Error("Call failed");
+      }
+    } catch (error) {
+      toast.error("Could not initiate call");
+    } finally {
+      setIsCallingCustomer(null);
+    }
+  };
+
+  // Send SMS handler
+  const handleSendSMS = async (phoneNumber: string, customerId: string) => {
+    // Navigate to communications page with pre-filled data
+    navigate(`/communications?action=sms&to=${encodeURIComponent(phoneNumber)}&customer_id=${customerId}`);
+  };
+
+  // Stats
+  const stats = {
+    total: customers.length,
+    residential: customers.filter(c => c.customer_type === "residential").length,
+    commercial: customers.filter(c => c.customer_type === "commercial").length,
+  };
 
   return (
     <div className="space-y-6">
-      <div className="page-header">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="page-title">Customers</h1>
-          <p className="page-subtitle">Manage customer profiles, sites, and service history</p>
+          <h1 className="text-2xl font-bold text-foreground">Customers</h1>
+          <p className="text-sm text-muted-foreground">
+            Manage customer accounts and service history
+          </p>
         </div>
-        <Button className="bg-accent text-accent-foreground hover:bg-accent/90">
-          <Plus className="w-4 h-4 mr-2" /> Add Customer
+        <Button data-testid="add-customer-button">
+          <Plus className="w-4 h-4 mr-2" />
+          Add Customer
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {[
-          { label: "Total Customers", value: "284", icon: "👥" },
-          { label: "Total Sites", value: "412", icon: "🏢" },
-          { label: "Avg. Lifetime Value", value: "$8,420", icon: "💰" },
-          { label: "Repeat Rate", value: "72%", icon: "🔄" },
-        ].map((stat) => (
-          <motion.div key={stat.label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="metric-card">
-            <div className="flex items-center justify-between">
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-4">
+        <Card>
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-2">
+              <Users className="w-5 h-5 text-primary" />
               <div>
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{stat.label}</p>
-                <p className="text-2xl font-bold text-foreground mt-1">{stat.value}</p>
+                <p className="text-2xl font-bold">{stats.total}</p>
+                <p className="text-xs text-muted-foreground">Total Customers</p>
               </div>
-              <span className="text-2xl">{stat.icon}</span>
             </div>
-          </motion.div>
-        ))}
-      </div>
-
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input placeholder="Search customers, sites, addresses..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
-        </div>
-      </div>
-
-      <div className="space-y-3">
-        {filtered.map((c) => {
-          const isExpanded = expandedCustomer === c.id;
-          return (
-            <motion.div key={c.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="metric-card !p-0 overflow-hidden">
-              <div className="flex items-center gap-4 px-5 py-4 cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => setExpandedCustomer(isExpanded ? null : c.id)}>
-                <button className="text-muted-foreground">
-                  {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                </button>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm font-semibold text-foreground">{c.name}</span>
-                    <span className="font-mono text-xs text-muted-foreground">{c.id}</span>
-                    <span className={`status-badge ${c.type === "Commercial" ? "status-open" : "status-complete"}`}>{c.type}</span>
-                  </div>
-                  <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{c.phone}</span>
-                    <span className="flex items-center gap-1"><Mail className="w-3 h-3" />{c.email}</span>
-                    <span className="flex items-center gap-1"><Building2 className="w-3 h-3" />{c.sites.length} site{c.sites.length !== 1 ? "s" : ""}</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-4 text-right">
-                  <div className="hidden md:block">
-                    <p className="text-sm font-semibold text-foreground">{c.totalSpent}</p>
-                    <Link to={`/jobs?customer=${c.id}`} className="text-xs text-accent hover:underline">{c.totalJobs} jobs</Link>
-                  </div>
-                  {c.agreement ? (
-                    <Link to="/agreements" className="status-badge status-complete hover:opacity-80">{c.agreement}</Link>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">No agreement</span>
-                  )}
-                </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-2">
+              <Home className="w-5 h-5 text-blue-500" />
+              <div>
+                <p className="text-2xl font-bold">{stats.residential}</p>
+                <p className="text-xs text-muted-foreground">Residential</p>
               </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-2">
+              <Building2 className="w-5 h-5 text-purple-500" />
+              <div>
+                <p className="text-2xl font-bold">{stats.commercial}</p>
+                <p className="text-xs text-muted-foreground">Commercial</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
-              <AnimatePresence>
-                {isExpanded && (
-                  <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
-                    <div className="border-t border-border bg-muted/20 px-5 py-3">
-                      <div className="flex items-center justify-between mb-3">
-                        <h4 className="text-xs font-semibold text-foreground uppercase tracking-wider">Sites ({c.sites.length})</h4>
-                        <Button variant="ghost" size="sm" className="h-7 text-xs"><Plus className="w-3 h-3 mr-1" /> Add Site</Button>
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <Input
+          placeholder="Search customers by name, email, or phone..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-10"
+          data-testid="customer-search-input"
+        />
+      </div>
+
+      {/* Customers Table */}
+      {isLoading ? (
+        <div className="flex justify-center py-12">
+          <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+        </div>
+      ) : customers.length === 0 ? (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <Users className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+            <h3 className="text-lg font-semibold mb-2">No customers found</h3>
+            <p className="text-muted-foreground">
+              {search ? "Try a different search term" : "Add your first customer to get started"}
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Customer</TableHead>
+                <TableHead className="hidden md:table-cell">Type</TableHead>
+                <TableHead>Contact</TableHead>
+                <TableHead className="hidden sm:table-cell">Actions</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {customers.map((customer) => (
+                <TableRow
+                  key={customer.id}
+                  className="cursor-pointer hover:bg-muted/50"
+                  onClick={() => {
+                    setSelectedCustomer(customer);
+                    setDetailTab("info");
+                  }}
+                  data-testid={`customer-row-${customer.id}`}
+                >
+                  <TableCell>
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                        {customer.customer_type === "commercial" ? (
+                          <Building2 className="w-5 h-5 text-primary" />
+                        ) : (
+                          <Home className="w-5 h-5 text-primary" />
+                        )}
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {c.sites.map((site) => (
-                          <div key={site.id} className="bg-card rounded-lg border border-border p-4">
-                            <div className="flex items-start justify-between mb-2">
-                              <div className="flex items-center gap-2">
-                                {site.type === "commercial" ? <Building2 className="w-4 h-4 text-info" /> : <Home className="w-4 h-4 text-success" />}
-                                <span className="text-sm font-medium text-foreground">{site.name}</span>
-                                <span className="font-mono text-xs text-muted-foreground">{site.id}</span>
-                              </div>
-                              {site.activeJobs > 0 && (
-                                <Link to={`/jobs?customer=${c.id}`} className="status-badge status-progress hover:opacity-80">{site.activeJobs} active</Link>
-                              )}
-                            </div>
-                            <p className="text-xs text-muted-foreground flex items-center gap-1 mb-2"><MapPin className="w-3 h-3" />{site.address}</p>
-                            <div className="flex flex-wrap gap-1 mb-2">
-                              {site.equipment.map((eq) => (
-                                <span key={eq} className="text-xs bg-muted px-2 py-0.5 rounded text-muted-foreground">{eq}</span>
-                              ))}
-                            </div>
-                            <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                              <span className="flex items-center gap-1"><Briefcase className="w-3 h-3" />Last: {site.lastService}</span>
-                            </div>
-                          </div>
-                        ))}
+                      <div>
+                        <p className="font-medium">{customer.name}</p>
+                        <p className="text-xs text-muted-foreground truncate max-w-[200px]">
+                          {customer.address}
+                        </p>
                       </div>
                     </div>
-                  </motion.div>
+                  </TableCell>
+                  <TableCell className="hidden md:table-cell">
+                    <Badge variant="outline" className="capitalize">
+                      {customer.customer_type || "residential"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <div className="space-y-1">
+                      {customer.phone && (
+                        <div className="flex items-center gap-1 text-sm">
+                          <Phone className="w-3 h-3 text-muted-foreground" />
+                          <span className="truncate max-w-[120px]">{customer.phone}</span>
+                        </div>
+                      )}
+                      {customer.email && (
+                        <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                          <Mail className="w-3 h-3" />
+                          <span className="truncate max-w-[120px]">{customer.email}</span>
+                        </div>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell className="hidden sm:table-cell">
+                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                      {customer.phone && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 px-2"
+                          onClick={() => handleClickToCall(customer.phone!, customer.id, customer.name)}
+                          disabled={isCallingCustomer === customer.id}
+                          data-testid={`call-customer-${customer.id}`}
+                        >
+                          {isCallingCustomer === customer.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <PhoneCall className="w-4 h-4" />
+                          )}
+                        </Button>
+                      )}
+                      {customer.phone && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 px-2"
+                          onClick={() => handleSendSMS(customer.phone!, customer.id)}
+                          data-testid={`sms-customer-${customer.id}`}
+                        >
+                          <MessageSquare className="w-4 h-4" />
+                        </Button>
+                      )}
+                      {customer.email && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 px-2"
+                          asChild
+                        >
+                          <a href={`mailto:${customer.email}`}>
+                            <Mail className="w-4 h-4" />
+                          </a>
+                        </Button>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
+      )}
+
+      {/* Customer Detail Sheet */}
+      <Sheet open={!!selectedCustomer} onOpenChange={(open) => !open && setSelectedCustomer(null)}>
+        <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
+          {selectedCustomer && (
+            <>
+              <SheetHeader>
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                    {selectedCustomer.customer_type === "commercial" ? (
+                      <Building2 className="w-6 h-6 text-primary" />
+                    ) : (
+                      <Home className="w-6 h-6 text-primary" />
+                    )}
+                  </div>
+                  <div>
+                    <SheetTitle>{selectedCustomer.name}</SheetTitle>
+                    <SheetDescription className="capitalize">
+                      {selectedCustomer.customer_type || "Residential"} Customer
+                    </SheetDescription>
+                  </div>
+                </div>
+              </SheetHeader>
+
+              {/* Quick Actions */}
+              <div className="flex gap-2 mt-4">
+                {selectedCustomer.phone && (
+                  <Button
+                    size="sm"
+                    onClick={() => handleClickToCall(
+                      selectedCustomer.phone!,
+                      selectedCustomer.id,
+                      selectedCustomer.name
+                    )}
+                    disabled={isCallingCustomer === selectedCustomer.id}
+                    data-testid="detail-call-button"
+                  >
+                    {isCallingCustomer === selectedCustomer.id ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <PhoneCall className="w-4 h-4 mr-2" />
+                    )}
+                    Call
+                  </Button>
                 )}
-              </AnimatePresence>
-            </motion.div>
-          );
-        })}
-      </div>
+                {selectedCustomer.phone && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleSendSMS(selectedCustomer.phone!, selectedCustomer.id)}
+                  >
+                    <MessageSquare className="w-4 h-4 mr-2" />
+                    SMS
+                  </Button>
+                )}
+                {selectedCustomer.email && (
+                  <Button size="sm" variant="outline" asChild>
+                    <a href={`mailto:${selectedCustomer.email}`}>
+                      <Mail className="w-4 h-4 mr-2" />
+                      Email
+                    </a>
+                  </Button>
+                )}
+              </div>
+
+              <Tabs value={detailTab} onValueChange={setDetailTab} className="mt-6">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="info">Info</TabsTrigger>
+                  <TabsTrigger value="sites">Sites ({customerSites.length})</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="info" className="space-y-4 mt-4">
+                  {/* Contact Info */}
+                  <div className="space-y-3">
+                    <h4 className="text-sm font-semibold">Contact Information</h4>
+                    {selectedCustomer.phone && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <Phone className="w-4 h-4 text-muted-foreground" />
+                        <span>{selectedCustomer.phone}</span>
+                      </div>
+                    )}
+                    {selectedCustomer.email && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <Mail className="w-4 h-4 text-muted-foreground" />
+                        <span>{selectedCustomer.email}</span>
+                      </div>
+                    )}
+                    {selectedCustomer.address && (
+                      <div className="flex items-start gap-2 text-sm">
+                        <MapPin className="w-4 h-4 text-muted-foreground mt-0.5" />
+                        <div>
+                          <p>{selectedCustomer.address}</p>
+                          {selectedCustomer.city && (
+                            <p className="text-muted-foreground">
+                              {selectedCustomer.city}, {selectedCustomer.state} {selectedCustomer.zip}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Notes */}
+                  {selectedCustomer.notes && (
+                    <div className="space-y-2">
+                      <h4 className="text-sm font-semibold">Notes</h4>
+                      <p className="text-sm text-muted-foreground">{selectedCustomer.notes}</p>
+                    </div>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="sites" className="mt-4">
+                  {customerSites.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <MapPin className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                      <p>No sites registered</p>
+                      <Button size="sm" variant="outline" className="mt-2" asChild>
+                        <Link to="/sites">Add Site</Link>
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {customerSites.map((site: Site) => (
+                        <Card key={site.id} className="cursor-pointer hover:bg-muted/50">
+                          <CardContent className="py-3">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="font-medium text-sm">{site.name}</p>
+                                <p className="text-xs text-muted-foreground">{site.address}</p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Badge variant="outline" className="capitalize text-xs">
+                                  {site.site_type}
+                                </Badge>
+                                <span className="text-xs text-muted-foreground">
+                                  {site.total_jobs} jobs
+                                </span>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
+                </TabsContent>
+              </Tabs>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
-};
-
-export default Customers;
+}
