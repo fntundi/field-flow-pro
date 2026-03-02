@@ -25,6 +25,7 @@ import {
   LogOut,
   Upload,
   GanttChart,
+  Warehouse,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -51,6 +52,7 @@ const navItems = [
   { to: "/checklists", icon: ClipboardCheck, label: "Checklists" },
   { to: "/invoices", icon: FileText, label: "Invoices" },
   { to: "/inventory", icon: Package, label: "Inventory" },
+  { to: "/inventory/manage", icon: Warehouse, label: "Warehouse" },
   { to: "/analytics", icon: BarChart3, label: "Analytics" },
   { to: "/reports", icon: FileText, label: "Reports" },
   { to: "/import", icon: Upload, label: "Import Data" },
