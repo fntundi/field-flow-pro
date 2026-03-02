@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -37,8 +38,21 @@ import ReportsBuilder from "@/pages/ReportsBuilder";
 import SchedulingBoard from "@/pages/SchedulingBoard";
 import ProjectBilling from "@/pages/ProjectBilling";
 import { Loader2 } from "lucide-react";
+import { registerServiceWorker, setupInstallPrompt, offlineStorage } from "@/lib/pwa";
 
 const queryClient = new QueryClient();
+
+// Initialize PWA features on app startup
+function initializePWA() {
+  // Register service worker
+  registerServiceWorker();
+  
+  // Setup install prompt listener
+  setupInstallPrompt();
+  
+  // Initialize offline storage
+  offlineStorage.init().catch(console.error);
+}
 
 // Protected Route wrapper
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
