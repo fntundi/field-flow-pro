@@ -60,6 +60,18 @@ Build a modern HVAC field service management system per RFC-002 with comprehensi
 - [x] **Transfer Status** - Pending, In Transit, Received, Cancelled
 - [x] New "Warehouse" page in sidebar navigation
 
+### PWA & Integrations (RFC-002 Section 4.9+) - NEW
+- [x] **Backend Router Fix** - Resolved P0 404 error for all new endpoints
+- [x] **Push Notifications API** - VAPID key generation, subscription management
+- [x] **QuickBooks Integration API** - Status, connect, disconnect, sync endpoints
+- [x] **AI Configuration API** - Provider/model selection via system settings
+- [x] **Settings UI Enhancement** - Full integrations tab with:
+  - Google Maps toggle (with API key status)
+  - AI Features: Provider dropdown, model input, failover toggle
+  - QuickBooks: Enable, connect, sync controls
+  - Push Notifications: Enable, trigger configuration
+- [x] **Inventory Cleanup** - Removed obsolete Inventory.tsx, consolidated to single route
+
 ### Install Project Billing (RFC-002 Section 4.5.3)
 - [x] **Milestone Templates** - 4 predefined configurable templates
 - [x] **Template Management** - Create, edit, configure templates
@@ -115,6 +127,20 @@ Build a modern HVAC field service management system per RFC-002 with comprehensi
 - `PUT /api/inventory/transfers/{id}/approve` - Approve transfer
 - `PUT /api/inventory/transfers/{id}/receive` - Mark transfer received
 
+### Push Notifications & PWA
+- `GET /api/push/vapid-key` - Get VAPID public key for subscription
+- `POST /api/push/subscribe` - Subscribe device to push notifications
+- `POST /api/push/unsubscribe` - Unsubscribe device
+- `GET /api/push/subscriptions` - List user's subscriptions
+
+### QuickBooks Integration
+- `GET /api/integrations/quickbooks/status` - Get connection status
+- `GET /api/integrations/quickbooks/auth-url` - Get OAuth URL
+- `GET /api/integrations/quickbooks/callback` - OAuth callback handler
+- `POST /api/integrations/quickbooks/disconnect` - Disconnect QuickBooks
+- `POST /api/integrations/quickbooks/sync` - Trigger sync operation
+- `GET /api/integrations/quickbooks/sync-logs` - Get sync history
+
 ### Milestone Templates
 - `GET /api/milestone-templates` - List all templates
 - `POST /api/milestone-templates` - Create new template
@@ -134,14 +160,18 @@ Build a modern HVAC field service management system per RFC-002 with comprehensi
 
 ## Test Credentials
 - **Demo Admin**: Click "Admin" button on login page
-- **Test User**: test@breezeflow.com / test123
+- **Test User**: test@test.com / test123
 - **Customer Portal**: https://hvac-dispatch-3.preview.emergentagent.com/customer
 
 ## Remaining/Future Tasks
 
+### P1 - In Progress
+- [ ] PWA full implementation (service worker registration, offline support)
+- [ ] QuickBooks OAuth flow testing with real credentials
+
 ### P2 - Medium Priority
 - [ ] Google Maps route calculation (BLOCKED - needs user API key)
-- [ ] Mobile app (React Native)
+- [ ] Mobile app (React Native) 
 - [ ] Deeper accounting integration (bi-directional sync)
 
 ### P3 - Lower Priority
@@ -157,27 +187,29 @@ Build a modern HVAC field service management system per RFC-002 with comprehensi
 │   ├── models.py (~2440 lines)
 │   └── tests/
 │       ├── test_milestone_reschedule.py
-│       └── test_chat_inventory.py (NEW)
+│       └── test_chat_inventory.py
+│       └── test_p0_integrations.py (NEW)
 ├── frontend/
 │   ├── src/
 │   │   ├── components/
-│   │   │   └── JobChat.tsx (NEW)
+│   │   │   └── JobChat.tsx
 │   │   ├── pages/
-│   │   │   ├── InventoryManagement.tsx (NEW)
+│   │   │   ├── InventoryManagement.tsx
+│   │   │   ├── Settings.tsx (ENHANCED)
 │   │   │   ├── ProjectBilling.tsx
 │   │   │   ├── Checklists.tsx
 │   │   │   ├── ReportsBuilder.tsx
 │   │   │   ├── SchedulingBoard.tsx
 │   │   │   ├── CustomerPortal.tsx
 │   │   │   └── ...
-│   │   └── lib/api.ts (~2740 lines)
+│   │   └── lib/api.ts (~2850 lines)
 │   └── package.json
 ├── memory/
 │   └── PRD.md
 └── test_reports/
-    ├── iteration_6.json
-    └── iteration_7.json (NEW)
+    ├── iteration_7.json
+    └── iteration_8.json (NEW)
 ```
 
 ## Last Updated
-March 2, 2026 - Job Chat and Multi-Warehouse Inventory features complete
+March 2, 2026 - P0 Backend Router Fix, Settings UI Enhancement with AI/QuickBooks/Push integrations
