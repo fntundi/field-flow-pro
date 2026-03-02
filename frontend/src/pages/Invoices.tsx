@@ -159,19 +159,6 @@ export default function Invoices() {
     }
   };
 
-  // Queries
-  const { data: invoices = [], isLoading: invoicesLoading } = useQuery({
-    queryKey: ["invoices", statusFilter],
-    queryFn: () => invoicesApi.getAll({
-      status: statusFilter !== "all" ? statusFilter : undefined,
-    }),
-  });
-
-  const { data: payments = [], isLoading: paymentsLoading } = useQuery({
-    queryKey: ["payments"],
-    queryFn: () => paymentsApi.getAll(),
-  });
-
   // Mutations
   const createInvoiceMutation = useMutation({
     mutationFn: invoicesApi.create,
