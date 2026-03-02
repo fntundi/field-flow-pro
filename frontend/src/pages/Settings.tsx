@@ -23,6 +23,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Settings as SettingsIcon,
   MapPin,
   Brain,
@@ -32,8 +39,14 @@ import {
   Shield,
   Warehouse,
   Save,
+  Bell,
+  Link2,
+  RefreshCw,
+  CheckCircle,
+  XCircle,
+  Loader2,
 } from "lucide-react";
-import { settingsApi, rolesApi, SystemSettings, Role } from "@/lib/api";
+import { settingsApi, rolesApi, quickbooksApi, SystemSettings, Role } from "@/lib/api";
 import { toast } from "sonner";
 
 export default function Settings() {
