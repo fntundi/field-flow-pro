@@ -7266,10 +7266,77 @@ async def stripe_webhook(request: Request):
 @api_router.post("/seed")
 async def seed_database():
     """Seed database with comprehensive sample data for demo mode"""
+    # Clear existing data
     await db.technicians.delete_many({})
     await db.jobs.delete_many({})
     await db.tasks.delete_many({})
     await db.appointments.delete_many({})
+    await db.customers.delete_many({})
+    await db.sites.delete_many({})
+    await db.leads.delete_many({})
+    await db.proposals.delete_many({})
+    await db.invoices.delete_many({})
+    await db.projects.delete_many({})
+    await db.customer_equipment.delete_many({})
+    await db.service_agreements.delete_many({})
+    await db.inventory_locations.delete_many({})
+    await db.inventory_stock.delete_many({})
+    await db.inventory_transfers.delete_many({})
+    
+    # ===== CUSTOMERS =====
+    customers_data = [
+        {"name": "Sarah Mitchell", "email": "sarah.mitchell@email.com", "phone": "(555) 111-2222", "address": "1423 Oak Ave", "city": "Dallas", "state": "TX", "zip": "75201", "type": "residential"},
+        {"name": "Acme Corp", "email": "facilities@acmecorp.com", "phone": "(555) 222-3333", "address": "500 Commerce St", "city": "Dallas", "state": "TX", "zip": "75202", "type": "commercial"},
+        {"name": "James Rivera", "email": "james.rivera@email.com", "phone": "(555) 333-4444", "address": "812 Elm St", "city": "Plano", "state": "TX", "zip": "75023", "type": "residential"},
+        {"name": "Metro Office Park", "email": "property@metrooffice.com", "phone": "(555) 444-5555", "address": "2100 N Central Expy", "city": "Richardson", "state": "TX", "zip": "75080", "type": "commercial"},
+        {"name": "Thompson Family", "email": "mark.thompson@email.com", "phone": "(555) 555-6666", "address": "4521 Maple Dr", "city": "Frisco", "state": "TX", "zip": "75034", "type": "residential"},
+        {"name": "Green Valley HOA", "email": "manager@greenvalleyhoa.com", "phone": "(555) 666-7777", "address": "100 Clubhouse Way", "city": "Allen", "state": "TX", "zip": "75013", "type": "commercial"},
+        {"name": "Dr. Patricia Wong", "email": "pwong@dentalcare.com", "phone": "(555) 777-8888", "address": "789 Medical Plaza", "city": "Plano", "state": "TX", "zip": "75024", "type": "commercial"},
+        {"name": "Sunrise Assisted Living", "email": "maintenance@sunriseal.com", "phone": "(555) 888-9999", "address": "1200 Senior Way", "city": "McKinney", "state": "TX", "zip": "75070", "type": "commercial"},
+        {"name": "Robert Chen", "email": "robert.chen@email.com", "phone": "(555) 999-0000", "address": "2345 Pine Lane", "city": "Plano", "state": "TX", "zip": "75025", "type": "residential"},
+        {"name": "Downtown Fitness", "email": "ops@downtownfitness.com", "phone": "(555) 000-1111", "address": "888 Main St", "city": "Dallas", "state": "TX", "zip": "75201", "type": "commercial"},
+    ]
+    
+    customer_ids = {}
+    for cust in customers_data:
+        customer = {
+            "id": str(uuid.uuid4()),
+            "name": cust["name"],
+            "email": cust["email"],
+            "phone": cust["phone"],
+            "address": cust["address"],
+            "city": cust["city"],
+            "state": cust["state"],
+            "zip": cust["zip"],
+            "customer_type": cust["type"],
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow(),
+        }
+        await db.customers.insert_one(customer)
+        customer_ids[cust["name"]] = customer["id"]
+    
+    # ===== SITES =====
+    sites_data = []
+    for cust in customers_data:
+        site_type = "commercial" if cust["type"] == "commercial" else "residential"
+        site = Site(
+            customer_id=customer_ids[cust["name"]],
+            customer_name=cust["name"],
+            name=f"{cust['name']} - Primary",
+            site_type=site_type,
+            address=cust["address"],
+            city=cust["city"],
+            state=cust["state"],
+            zip_code=cust["zip"],
+            access_instructions="Ring doorbell on arrival" if site_type == "residential" else "Check in at front desk",
+            gate_code="#1234" if site_type == "commercial" else None,
+            parking_notes="Park in driveway" if site_type == "residential" else "Visitor parking in rear",
+            has_pets=site_type == "residential" and cust["name"] in ["Sarah Mitchell", "Thompson Family"],
+            pet_notes="Friendly dog, keep gate closed" if cust["name"] == "Sarah Mitchell" else ("Cat, indoor only" if cust["name"] == "Thompson Family" else None),
+            total_jobs=0,
+        )
+        await db.sites.insert_one(site.dict())
+        sites_data.append(site)
     
     # ===== TECHNICIANS =====
     technicians_data = [
