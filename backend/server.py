@@ -2789,14 +2789,13 @@ async def get_predictive_maintenance(data: dict):
     if not settings.ai_features_enabled:
         raise HTTPException(status_code=400, detail="AI features are disabled")
     
-    client = get_gemini_client()
-    if not client:
-        raise HTTPException(status_code=500, detail="AI service not available")
+    if not os.environ.get("EMERGENT_LLM_KEY"):
+        raise HTTPException(status_code=500, detail="AI service not configured")
     
     equipment = data.get("equipment", {})
     service_history = data.get("service_history", [])
     
-    prompt = f"""You are an HVAC predictive maintenance expert. Analyze this equipment and service history to predict maintenance needs.
+    prompt = f"""Analyze this equipment and service history to predict maintenance needs.
 
 Equipment:
 - Type: {equipment.get('equipment_type', 'Unknown')}
@@ -2822,17 +2821,15 @@ Provide:
 Keep response focused and actionable."""
 
     try:
-        response = await client.chat(
-            prompt=prompt,
-            model="gemini-2.0-flash"
-        )
+        session_id = f"maintenance-{str(uuid.uuid4())[:8]}"
+        response = get_gemini_response(prompt, session_id)
         return {
             "predictions": response,
             "ai_model": "gemini-2.0-flash"
         }
     except Exception as e:
         logger.error(f"AI predictive maintenance error: {e}")
-        raise HTTPException(status_code=500, detail="AI service error")
+        raise HTTPException(status_code=500, detail=f"AI service error: {str(e)}")
 
 # ==================== GOOGLE MAPS ROUTING API ====================
 
