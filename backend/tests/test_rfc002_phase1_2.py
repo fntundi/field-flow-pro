@@ -472,7 +472,10 @@ class TestProposals:
         return proposal_id
     
     def test_add_proposal_option(self, api_client):
-        """POST /api/proposals/{id}/options - adds Good/Better/Best option"""
+        """POST /api/proposals/{id}/options - adds Good/Better/Best option
+        
+        NOTE: ProposalLineItem requires 'name' field per models.py
+        """
         # Create a proposal first
         proposal_response = api_client.post(f"{BASE_URL}/api/proposals", json={
             "customer_name": "TEST_Option Customer",
@@ -482,14 +485,14 @@ class TestProposals:
         proposal_id = proposal_response.json()["id"]
         
         try:
-            # Add Good option
+            # Add Good option - include required 'name' field in line_items
             good_option = {
                 "tier": "good",
                 "name": "Basic AC System",
                 "description": "Entry-level 14 SEER system",
                 "line_items": [
-                    {"item_type": "equipment", "description": "14 SEER AC Unit", "quantity": 1, "unit_price": 3500},
-                    {"item_type": "labor", "description": "Installation Labor", "quantity": 8, "unit_price": 95}
+                    {"item_type": "equipment", "name": "14 SEER AC Unit", "description": "Entry-level unit", "quantity": 1, "unit_price": 3500},
+                    {"item_type": "labor", "name": "Installation Labor", "description": "Standard installation", "quantity": 8, "unit_price": 95}
                 ],
                 "is_recommended": False
             }
@@ -507,8 +510,8 @@ class TestProposals:
                 "name": "Mid-Range AC System",
                 "description": "16 SEER system with better efficiency",
                 "line_items": [
-                    {"item_type": "equipment", "description": "16 SEER AC Unit", "quantity": 1, "unit_price": 4500},
-                    {"item_type": "labor", "description": "Installation Labor", "quantity": 8, "unit_price": 95}
+                    {"item_type": "equipment", "name": "16 SEER AC Unit", "description": "Mid-range unit", "quantity": 1, "unit_price": 4500},
+                    {"item_type": "labor", "name": "Installation Labor", "description": "Standard installation", "quantity": 8, "unit_price": 95}
                 ],
                 "is_recommended": True
             }
@@ -525,8 +528,8 @@ class TestProposals:
                 "name": "Premium AC System",
                 "description": "20 SEER high-efficiency system",
                 "line_items": [
-                    {"item_type": "equipment", "description": "20 SEER AC Unit", "quantity": 1, "unit_price": 6500},
-                    {"item_type": "labor", "description": "Installation Labor", "quantity": 10, "unit_price": 95}
+                    {"item_type": "equipment", "name": "20 SEER AC Unit", "description": "Premium unit", "quantity": 1, "unit_price": 6500},
+                    {"item_type": "labor", "name": "Installation Labor", "description": "Premium installation", "quantity": 10, "unit_price": 95}
                 ],
                 "is_recommended": False
             }
