@@ -1314,3 +1314,844 @@ export const seedApi = {
     method: 'POST',
   }),
 };
+
+// ==================== SYSTEM SETTINGS API ====================
+
+export interface SystemSettings {
+  id: string;
+  google_maps_enabled: boolean;
+  google_maps_api_key_set: boolean;
+  ai_features_enabled: boolean;
+  default_tax_rate: number;
+  default_labor_rate: number;
+  overtime_multiplier: number;
+  default_trip_charge: number;
+  default_parts_markup: number;
+  default_job_duration_hours: number;
+  buffer_time_percent: number;
+  require_shift_start_stock_check: boolean;
+  require_shift_end_stock_check: boolean;
+  customer_portal_enabled: boolean;
+  allow_customer_scheduling: boolean;
+}
+
+export const settingsApi = {
+  get: () => fetchApi<SystemSettings>('/system/settings'),
+  
+  update: (data: Partial<SystemSettings>) =>
+    fetchApi<SystemSettings>('/system/settings', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+};
+
+// ==================== ROLES API (RFC-002) ====================
+
+export interface Permission {
+  module: string;
+  action: string;
+  allowed: boolean;
+}
+
+export interface Role {
+  id: string;
+  name: string;
+  display_name: string;
+  description?: string;
+  permissions: Permission[];
+  is_system: boolean;
+  created_at: string;
+}
+
+export const rolesApi = {
+  getAll: () => fetchApi<Role[]>('/roles'),
+  
+  create: (data: { name: string; display_name: string; description?: string; permissions?: Permission[] }) =>
+    fetchApi<Role>('/roles', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  
+  delete: (roleId: string) =>
+    fetchApi<{ message: string }>(`/roles/${roleId}`, {
+      method: 'DELETE',
+    }),
+};
+
+// ==================== LEADS API (RFC-002) ====================
+
+export type LeadStatus = 'new' | 'contacted' | 'qualified' | 'quoted' | 'won' | 'lost';
+
+export interface Lead {
+  id: string;
+  lead_number: string;
+  contact_name: string;
+  contact_email?: string;
+  contact_phone?: string;
+  company_name?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip_code?: string;
+  source: string;
+  source_detail?: string;
+  preferred_contact_method: 'phone' | 'email' | 'text' | 'any';
+  status: LeadStatus;
+  status_changed_at: string;
+  assigned_to_id?: string;
+  assigned_to_name?: string;
+  first_contact_at?: string;
+  qualified_at?: string;
+  quoted_at?: string;
+  closed_at?: string;
+  close_reason?: string;
+  converted_customer_id?: string;
+  converted_job_id?: string;
+  proposal_ids: string[];
+  notes?: string;
+  tags: string[];
+  estimated_value: number;
+  priority: 'low' | 'normal' | 'high' | 'urgent';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LeadMetrics {
+  total_leads: number;
+  by_status: Record<string, number>;
+  by_source: Record<string, number>;
+  lead_to_close_ratio: number;
+  avg_time_to_first_contact_hours: number;
+}
+
+export const leadsApi = {
+  getAll: (params?: { status?: string; source?: string; assigned_to?: string; search?: string; limit?: number }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.status) searchParams.append('status', params.status);
+    if (params?.source) searchParams.append('source', params.source);
+    if (params?.assigned_to) searchParams.append('assigned_to', params.assigned_to);
+    if (params?.search) searchParams.append('search', params.search);
+    if (params?.limit) searchParams.append('limit', params.limit.toString());
+    const query = searchParams.toString();
+    return fetchApi<Lead[]>(`/leads${query ? `?${query}` : ''}`);
+  },
+  
+  getMetrics: () => fetchApi<LeadMetrics>('/leads/metrics'),
+  
+  getById: (id: string) => fetchApi<Lead>(`/leads/${id}`),
+  
+  create: (data: {
+    contact_name: string;
+    contact_email?: string;
+    contact_phone?: string;
+    company_name?: string;
+    address?: string;
+    city?: string;
+    state?: string;
+    zip_code?: string;
+    source?: string;
+    source_detail?: string;
+    preferred_contact_method?: string;
+    notes?: string;
+    tags?: string[];
+    estimated_value?: number;
+    priority?: string;
+  }) =>
+    fetchApi<Lead>('/leads', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  
+  update: (id: string, data: Partial<Lead>) =>
+    fetchApi<Lead>(`/leads/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  
+  convert: (id: string) =>
+    fetchApi<{ message: string; customer_id: string; lead_id: string }>(`/leads/${id}/convert`, {
+      method: 'POST',
+    }),
+  
+  delete: (id: string) =>
+    fetchApi<{ message: string }>(`/leads/${id}`, {
+      method: 'DELETE',
+    }),
+};
+
+// ==================== PCB API (RFC-002) ====================
+
+export type PCBStatus = 'created' | 'assigned' | 'follow_up' | 'converted' | 'closed';
+
+export interface PCB {
+  id: string;
+  pcb_number: string;
+  lead_id?: string;
+  job_id?: string;
+  customer_id?: string;
+  customer_name?: string;
+  reason: string;
+  reason_category: 'follow_up' | 'upsell' | 'warranty' | 'complaint' | 'question' | 'other';
+  status: PCBStatus;
+  status_changed_at: string;
+  assigned_technician_id?: string;
+  assigned_technician_name?: string;
+  assigned_owner_id?: string;
+  assigned_owner_name?: string;
+  follow_up_date?: string;
+  follow_up_time?: string;
+  reminder_sent: boolean;
+  converted_to_job_id?: string;
+  resolution_notes?: string;
+  resolved_at?: string;
+  priority: 'low' | 'normal' | 'high' | 'urgent';
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PCBMetrics {
+  total_pcbs: number;
+  open_pcbs: number;
+  by_status: Record<string, number>;
+  conversion_rate: number;
+  overdue_count: number;
+}
+
+export const pcbsApi = {
+  getAll: (params?: { status?: string; assigned_to?: string; priority?: string; limit?: number }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.status) searchParams.append('status', params.status);
+    if (params?.assigned_to) searchParams.append('assigned_to', params.assigned_to);
+    if (params?.priority) searchParams.append('priority', params.priority);
+    if (params?.limit) searchParams.append('limit', params.limit.toString());
+    const query = searchParams.toString();
+    return fetchApi<PCB[]>(`/pcbs${query ? `?${query}` : ''}`);
+  },
+  
+  getMetrics: () => fetchApi<PCBMetrics>('/pcbs/metrics'),
+  
+  getById: (id: string) => fetchApi<PCB>(`/pcbs/${id}`),
+  
+  create: (data: {
+    lead_id?: string;
+    job_id?: string;
+    customer_id?: string;
+    customer_name?: string;
+    reason: string;
+    reason_category?: string;
+    assigned_technician_id?: string;
+    assigned_owner_id?: string;
+    follow_up_date?: string;
+    follow_up_time?: string;
+    priority?: string;
+    notes?: string;
+  }) =>
+    fetchApi<PCB>('/pcbs', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  
+  update: (id: string, data: Partial<PCB>) =>
+    fetchApi<PCB>(`/pcbs/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  
+  convert: (id: string) =>
+    fetchApi<{ message: string; job_id: string; job_number: string }>(`/pcbs/${id}/convert`, {
+      method: 'POST',
+    }),
+  
+  delete: (id: string) =>
+    fetchApi<{ message: string }>(`/pcbs/${id}`, {
+      method: 'DELETE',
+    }),
+};
+
+// ==================== PROPOSALS API (RFC-002) ====================
+
+export type ProposalStatus = 'draft' | 'sent' | 'viewed' | 'accepted' | 'rejected' | 'expired';
+
+export interface ProposalLineItem {
+  id: string;
+  item_type: 'equipment' | 'labor' | 'material' | 'misc' | 'discount';
+  name: string;
+  description?: string;
+  sku?: string;
+  manufacturer?: string;
+  model?: string;
+  warranty_years?: number;
+  quantity: number;
+  unit: string;
+  unit_price: number;
+  extended_price: number;
+  unit_cost: number;
+  margin_percent: number;
+}
+
+export interface ProposalOption {
+  id: string;
+  tier: 'good' | 'better' | 'best';
+  name: string;
+  description?: string;
+  line_items: ProposalLineItem[];
+  equipment_total: number;
+  labor_total: number;
+  materials_total: number;
+  misc_total: number;
+  subtotal: number;
+  discount_amount: number;
+  tax_amount: number;
+  total: number;
+  financing_available: boolean;
+  monthly_payment?: number;
+  financing_term_months?: number;
+  is_recommended: boolean;
+}
+
+export interface Proposal {
+  id: string;
+  proposal_number: string;
+  lead_id?: string;
+  job_id?: string;
+  customer_id?: string;
+  customer_name: string;
+  customer_email?: string;
+  customer_phone?: string;
+  site_address: string;
+  title: string;
+  description?: string;
+  options: ProposalOption[];
+  selected_option_id?: string;
+  status: ProposalStatus;
+  status_changed_at: string;
+  valid_until?: string;
+  sent_at?: string;
+  viewed_at?: string;
+  accepted_at?: string;
+  created_by_id?: string;
+  created_by_name?: string;
+  customer_signature?: string;
+  customer_signed_at?: string;
+  converted_job_id?: string;
+  notes?: string;
+  internal_notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProposalMetrics {
+  total_proposals: number;
+  by_status: Record<string, number>;
+  open_quotes: number;
+  win_rate: number;
+}
+
+export const proposalsApi = {
+  getAll: (params?: { status?: string; lead_id?: string; customer_id?: string; limit?: number }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.status) searchParams.append('status', params.status);
+    if (params?.lead_id) searchParams.append('lead_id', params.lead_id);
+    if (params?.customer_id) searchParams.append('customer_id', params.customer_id);
+    if (params?.limit) searchParams.append('limit', params.limit.toString());
+    const query = searchParams.toString();
+    return fetchApi<Proposal[]>(`/proposals${query ? `?${query}` : ''}`);
+  },
+  
+  getMetrics: () => fetchApi<ProposalMetrics>('/proposals/metrics'),
+  
+  getById: (id: string) => fetchApi<Proposal>(`/proposals/${id}`),
+  
+  create: (data: {
+    lead_id?: string;
+    job_id?: string;
+    customer_id?: string;
+    customer_name: string;
+    customer_email?: string;
+    customer_phone?: string;
+    site_address: string;
+    title: string;
+    description?: string;
+    valid_until?: string;
+    notes?: string;
+  }) =>
+    fetchApi<Proposal>('/proposals', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  
+  update: (id: string, data: Partial<Proposal>) =>
+    fetchApi<Proposal>(`/proposals/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  
+  addOption: (id: string, option: {
+    tier: string;
+    name: string;
+    description?: string;
+    line_items?: any[];
+    is_recommended?: boolean;
+  }) =>
+    fetchApi<{ message: string; option_id: string }>(`/proposals/${id}/options`, {
+      method: 'POST',
+      body: JSON.stringify(option),
+    }),
+  
+  accept: (id: string, optionId: string, signature?: string) =>
+    fetchApi<{ message: string; job_id: string; job_number: string }>(
+      `/proposals/${id}/accept?option_id=${optionId}${signature ? `&signature=${encodeURIComponent(signature)}` : ''}`,
+      { method: 'POST' }
+    ),
+};
+
+// ==================== JOB TYPES API (RFC-002) ====================
+
+export interface ChecklistItemTemplate {
+  id: string;
+  order: number;
+  description: string;
+  requires_before_photo: boolean;
+  requires_after_photo: boolean;
+  requires_note: boolean;
+  requires_measurement: boolean;
+  requires_signature: boolean;
+  is_required: boolean;
+  allow_exception: boolean;
+}
+
+export interface JobTypeTemplate {
+  id: string;
+  name: string;
+  category: 'residential_service' | 'residential_install' | 'commercial_service' | 'commercial_install';
+  description?: string;
+  default_priority: 'low' | 'normal' | 'high' | 'urgent';
+  estimated_duration_hours: number;
+  requires_permit: boolean;
+  requires_inspection: boolean;
+  base_labor_rate: number;
+  trip_charge: number;
+  checklist_items: ChecklistItemTemplate[];
+  version: number;
+  is_active: boolean;
+  created_at: string;
+}
+
+export const jobTypesApi = {
+  getAll: (params?: { category?: string; active_only?: boolean }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.category) searchParams.append('category', params.category);
+    if (params?.active_only !== undefined) searchParams.append('active_only', params.active_only.toString());
+    const query = searchParams.toString();
+    return fetchApi<JobTypeTemplate[]>(`/job-types${query ? `?${query}` : ''}`);
+  },
+  
+  create: (data: {
+    name: string;
+    category: string;
+    description?: string;
+    default_priority?: string;
+    estimated_duration_hours?: number;
+    requires_permit?: boolean;
+    requires_inspection?: boolean;
+    base_labor_rate?: number;
+    trip_charge?: number;
+    checklist_items?: ChecklistItemTemplate[];
+  }) =>
+    fetchApi<JobTypeTemplate>('/job-types', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  
+  update: (id: string, data: Partial<JobTypeTemplate>) =>
+    fetchApi<JobTypeTemplate>(`/job-types/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+};
+
+// ==================== JOB CHECKLISTS API (RFC-002) ====================
+
+export interface ChecklistItemEvidence {
+  id: string;
+  evidence_type: 'before_photo' | 'after_photo' | 'note' | 'signature' | 'measurement';
+  photo_url?: string;
+  photo_data?: string;
+  photo_taken_at?: string;
+  measurement_value?: number;
+  measurement_unit?: string;
+  note_text?: string;
+  signature_data?: string;
+  captured_by_id?: string;
+  captured_by_name?: string;
+  captured_at: string;
+}
+
+export interface JobChecklistItem {
+  id: string;
+  template_item_id?: string;
+  order: number;
+  description: string;
+  requires_before_photo: boolean;
+  requires_after_photo: boolean;
+  requires_note: boolean;
+  requires_measurement: boolean;
+  requires_signature: boolean;
+  is_required: boolean;
+  status: 'not_started' | 'in_progress' | 'completed' | 'exception';
+  evidence: ChecklistItemEvidence[];
+  has_exception: boolean;
+  exception_reason?: string;
+  completed_at?: string;
+  completed_by_id?: string;
+  completed_by_name?: string;
+}
+
+export interface JobChecklist {
+  id: string;
+  job_id: string;
+  template_id?: string;
+  template_name?: string;
+  items: JobChecklistItem[];
+  total_items: number;
+  completed_items: number;
+  exception_items: number;
+  percent_complete: number;
+  can_complete_job: boolean;
+  blocking_items: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export const jobChecklistApi = {
+  get: (jobId: string) => fetchApi<{ checklist: JobChecklist | null; message?: string }>(`/jobs/${jobId}/checklist`),
+  
+  create: (jobId: string, templateId?: string) =>
+    fetchApi<JobChecklist>(
+      `/jobs/${jobId}/checklist${templateId ? `?template_id=${templateId}` : ''}`,
+      { method: 'POST' }
+    ),
+  
+  updateItem: (jobId: string, itemId: string, data: {
+    status?: string;
+    evidence?: Partial<ChecklistItemEvidence>;
+    has_exception?: boolean;
+    exception_reason?: string;
+    completed_by_id?: string;
+    completed_by_name?: string;
+  }) =>
+    fetchApi<JobChecklist>(`/jobs/${jobId}/checklist/items/${itemId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+};
+
+// ==================== VENDORS API (RFC-002) ====================
+
+export interface Vendor {
+  id: string;
+  vendor_number: string;
+  name: string;
+  contact_name?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip_code?: string;
+  payment_terms: string;
+  credit_limit?: number;
+  account_number?: string;
+  website?: string;
+  notes?: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export const vendorsApi = {
+  getAll: (params?: { active_only?: boolean; search?: string }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.active_only !== undefined) searchParams.append('active_only', params.active_only.toString());
+    if (params?.search) searchParams.append('search', params.search);
+    const query = searchParams.toString();
+    return fetchApi<Vendor[]>(`/vendors${query ? `?${query}` : ''}`);
+  },
+  
+  getById: (id: string) => fetchApi<Vendor>(`/vendors/${id}`),
+  
+  create: (data: {
+    name: string;
+    contact_name?: string;
+    email?: string;
+    phone?: string;
+    address?: string;
+    city?: string;
+    state?: string;
+    zip_code?: string;
+    payment_terms?: string;
+    account_number?: string;
+    notes?: string;
+  }) =>
+    fetchApi<Vendor>('/vendors', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  
+  update: (id: string, data: Partial<Vendor>) =>
+    fetchApi<Vendor>(`/vendors/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+};
+
+// ==================== PURCHASE ORDERS API (RFC-002) ====================
+
+export interface POLineItem {
+  id: string;
+  item_id: string;
+  item_name: string;
+  sku: string;
+  quantity_ordered: number;
+  quantity_received: number;
+  unit: string;
+  unit_cost: number;
+  extended_cost: number;
+}
+
+export interface PurchaseOrder {
+  id: string;
+  po_number: string;
+  vendor_id: string;
+  vendor_name: string;
+  line_items: POLineItem[];
+  subtotal: number;
+  tax_amount: number;
+  shipping_amount: number;
+  total: number;
+  status: 'draft' | 'submitted' | 'confirmed' | 'partial' | 'received' | 'cancelled';
+  order_date?: string;
+  expected_date?: string;
+  received_date?: string;
+  receive_to_location_id?: string;
+  receive_to_location_name?: string;
+  job_id?: string;
+  notes?: string;
+  created_at: string;
+}
+
+export const purchaseOrdersApi = {
+  getAll: (params?: { status?: string; vendor_id?: string; limit?: number }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.status) searchParams.append('status', params.status);
+    if (params?.vendor_id) searchParams.append('vendor_id', params.vendor_id);
+    if (params?.limit) searchParams.append('limit', params.limit.toString());
+    const query = searchParams.toString();
+    return fetchApi<PurchaseOrder[]>(`/purchase-orders${query ? `?${query}` : ''}`);
+  },
+  
+  getById: (id: string) => fetchApi<PurchaseOrder>(`/purchase-orders/${id}`),
+  
+  create: (data: {
+    vendor_id: string;
+    line_items?: { item_id: string; quantity_ordered: number; unit_cost?: number }[];
+    expected_date?: string;
+    receive_to_location_id?: string;
+    job_id?: string;
+    notes?: string;
+  }) =>
+    fetchApi<PurchaseOrder>('/purchase-orders', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  
+  updateStatus: (id: string, status: string) =>
+    fetchApi<{ message: string }>(`/purchase-orders/${id}/status?status=${status}`, {
+      method: 'PUT',
+    }),
+};
+
+// ==================== INVOICES API (RFC-002) ====================
+
+export interface InvoiceLineItem {
+  id: string;
+  line_type: 'labor' | 'parts' | 'trip' | 'misc' | 'discount' | 'tax';
+  description: string;
+  sku?: string;
+  quantity: number;
+  unit: string;
+  unit_price: number;
+  extended_price: number;
+  cost: number;
+  markup_percent: number;
+}
+
+export interface InvoiceRecord {
+  id: string;
+  invoice_number: string;
+  job_id?: string;
+  job_number?: string;
+  customer_id?: string;
+  customer_name: string;
+  customer_email?: string;
+  billing_address?: string;
+  line_items: InvoiceLineItem[];
+  labor_total: number;
+  parts_total: number;
+  trip_total: number;
+  misc_total: number;
+  subtotal: number;
+  discount_amount: number;
+  tax_rate: number;
+  tax_amount: number;
+  total: number;
+  status: 'draft' | 'sent' | 'partially_paid' | 'paid' | 'void' | 'overdue';
+  amount_paid: number;
+  balance_due: number;
+  invoice_date: string;
+  due_date?: string;
+  paid_date?: string;
+  notes?: string;
+  created_at: string;
+}
+
+export const invoicesApi = {
+  getAll: (params?: { status?: string; customer_id?: string; job_id?: string; limit?: number }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.status) searchParams.append('status', params.status);
+    if (params?.customer_id) searchParams.append('customer_id', params.customer_id);
+    if (params?.job_id) searchParams.append('job_id', params.job_id);
+    if (params?.limit) searchParams.append('limit', params.limit.toString());
+    const query = searchParams.toString();
+    return fetchApi<InvoiceRecord[]>(`/invoices${query ? `?${query}` : ''}`);
+  },
+  
+  getById: (id: string) => fetchApi<InvoiceRecord>(`/invoices/${id}`),
+  
+  create: (data: {
+    job_id?: string;
+    customer_id?: string;
+    customer_name: string;
+    customer_email?: string;
+    billing_address?: string;
+    line_items?: any[];
+    tax_rate?: number;
+    due_date?: string;
+    notes?: string;
+  }) =>
+    fetchApi<InvoiceRecord>('/invoices', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  
+  updateStatus: (id: string, status: string) =>
+    fetchApi<{ message: string }>(`/invoices/${id}/status?status=${status}`, {
+      method: 'PUT',
+    }),
+};
+
+// ==================== PAYMENTS API (RFC-002) ====================
+
+export interface PaymentRecord {
+  id: string;
+  payment_number: string;
+  invoice_id: string;
+  invoice_number?: string;
+  customer_id?: string;
+  customer_name?: string;
+  payment_method: 'card' | 'ach' | 'check' | 'cash' | 'financing' | 'other';
+  amount: number;
+  card_last_four?: string;
+  card_brand?: string;
+  check_number?: string;
+  financing_provider?: string;
+  transaction_id?: string;
+  processed_at: string;
+  status: 'pending' | 'completed' | 'failed' | 'refunded';
+  notes?: string;
+  created_at: string;
+}
+
+export const paymentsApi = {
+  getAll: (params?: { invoice_id?: string; customer_id?: string; limit?: number }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.invoice_id) searchParams.append('invoice_id', params.invoice_id);
+    if (params?.customer_id) searchParams.append('customer_id', params.customer_id);
+    if (params?.limit) searchParams.append('limit', params.limit.toString());
+    const query = searchParams.toString();
+    return fetchApi<PaymentRecord[]>(`/payments${query ? `?${query}` : ''}`);
+  },
+  
+  create: (data: {
+    invoice_id: string;
+    payment_method: string;
+    amount: number;
+    card_last_four?: string;
+    check_number?: string;
+    financing_provider?: string;
+    notes?: string;
+  }) =>
+    fetchApi<PaymentRecord>('/payments', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+};
+
+// ==================== CUSTOMER EQUIPMENT API (RFC-002) ====================
+
+export interface CustomerEquipmentRecord {
+  id: string;
+  customer_id: string;
+  customer_name?: string;
+  site_address?: string;
+  equipment_type: string;
+  manufacturer?: string;
+  model?: string;
+  serial_number?: string;
+  location_in_building?: string;
+  install_date?: string;
+  warranty_start_date?: string;
+  warranty_end_date?: string;
+  warranty_type: 'manufacturer' | 'extended' | 'labor' | 'parts' | 'full';
+  warranty_terms?: string;
+  is_in_warranty: boolean;
+  warranty_expiring_soon: boolean;
+  last_service_date?: string;
+  next_service_date?: string;
+  service_job_ids: string[];
+  notes?: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export const customerEquipmentApi = {
+  getAll: (params?: { customer_id?: string; warranty_expiring?: boolean; limit?: number }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.customer_id) searchParams.append('customer_id', params.customer_id);
+    if (params?.warranty_expiring) searchParams.append('warranty_expiring', 'true');
+    if (params?.limit) searchParams.append('limit', params.limit.toString());
+    const query = searchParams.toString();
+    return fetchApi<CustomerEquipmentRecord[]>(`/customer-equipment${query ? `?${query}` : ''}`);
+  },
+  
+  getById: (id: string) => fetchApi<CustomerEquipmentRecord>(`/customer-equipment/${id}`),
+  
+  create: (data: {
+    customer_id: string;
+    site_address?: string;
+    equipment_type: string;
+    manufacturer?: string;
+    model?: string;
+    serial_number?: string;
+    location_in_building?: string;
+    install_date?: string;
+    warranty_start_date?: string;
+    warranty_end_date?: string;
+    warranty_type?: string;
+    notes?: string;
+  }) =>
+    fetchApi<CustomerEquipmentRecord>('/customer-equipment', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+};
