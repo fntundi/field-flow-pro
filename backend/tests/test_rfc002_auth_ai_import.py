@@ -341,7 +341,7 @@ class TestImportWizard:
     
     def test_get_customers_template(self, authenticated_client):
         """Test getting CSV template for customers import"""
-        response = authenticated_client.get(f"{BASE_URL}/api/import/template/customers")
+        response = authenticated_client.get(f"{BASE_URL}/api/import/templates/customers")
         
         assert response.status_code == 200, f"Get customers template failed: {response.text}"
         data = response.json()
@@ -353,7 +353,7 @@ class TestImportWizard:
     
     def test_get_leads_template(self, authenticated_client):
         """Test getting CSV template for leads import"""
-        response = authenticated_client.get(f"{BASE_URL}/api/import/template/leads")
+        response = authenticated_client.get(f"{BASE_URL}/api/import/templates/leads")
         
         assert response.status_code == 200, f"Get leads template failed: {response.text}"
         data = response.json()
@@ -363,7 +363,7 @@ class TestImportWizard:
     
     def test_get_jobs_template(self, authenticated_client):
         """Test getting CSV template for jobs import"""
-        response = authenticated_client.get(f"{BASE_URL}/api/import/template/jobs")
+        response = authenticated_client.get(f"{BASE_URL}/api/import/templates/jobs")
         
         assert response.status_code == 200, f"Get jobs template failed: {response.text}"
         data = response.json()
@@ -373,7 +373,7 @@ class TestImportWizard:
     
     def test_get_inventory_template(self, authenticated_client):
         """Test getting CSV template for inventory import"""
-        response = authenticated_client.get(f"{BASE_URL}/api/import/template/inventory")
+        response = authenticated_client.get(f"{BASE_URL}/api/import/templates/inventory")
         
         assert response.status_code == 200, f"Get inventory template failed: {response.text}"
         data = response.json()
@@ -383,7 +383,7 @@ class TestImportWizard:
     
     def test_get_equipment_template(self, authenticated_client):
         """Test getting CSV template for equipment import"""
-        response = authenticated_client.get(f"{BASE_URL}/api/import/template/equipment")
+        response = authenticated_client.get(f"{BASE_URL}/api/import/templates/equipment")
         
         assert response.status_code == 200, f"Get equipment template failed: {response.text}"
         data = response.json()
@@ -393,7 +393,8 @@ class TestImportWizard:
     
     def test_validate_customers_import(self, authenticated_client):
         """Test validating customer import data"""
-        response = authenticated_client.post(f"{BASE_URL}/api/import/validate/customers", json={
+        response = authenticated_client.post(f"{BASE_URL}/api/import/validate", json={
+            "type": "customers",
             "records": [
                 {"name": "Test Customer 1", "email": "test1@example.com", "phone": "555-1234"},
                 {"name": "Test Customer 2", "email": "test2@example.com", "phone": "555-5678"}
@@ -411,10 +412,11 @@ class TestImportWizard:
     
     def test_validate_leads_import(self, authenticated_client):
         """Test validating leads import data"""
-        response = authenticated_client.post(f"{BASE_URL}/api/import/validate/leads", json={
+        response = authenticated_client.post(f"{BASE_URL}/api/import/validate", json={
+            "type": "leads",
             "records": [
-                {"name": "Test Lead 1", "email": "lead1@example.com", "source": "website"},
-                {"name": "Test Lead 2", "phone": "555-9999", "source": "referral"}
+                {"contact_name": "Test Lead 1", "contact_email": "lead1@example.com", "source": "website"},
+                {"contact_name": "Test Lead 2", "contact_phone": "555-9999", "source": "referral"}
             ]
         })
         
