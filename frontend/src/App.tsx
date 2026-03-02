@@ -23,6 +23,9 @@ import Inventory from "@/pages/Inventory";
 import Analytics from "@/pages/Analytics";
 import PlaceholderPage from "@/pages/PlaceholderPage";
 import NotFound from "./pages/NotFound";
+import GanttChart from "@/pages/GanttChart";
+import CustomerPortal from "@/pages/CustomerPortal";
+import MaintenanceAgreements from "@/pages/MaintenanceAgreements";
 
 const queryClient = new QueryClient();
 
@@ -32,12 +35,18 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <AppLayout>
-          <Routes>
+        <Routes>
+          {/* Customer Portal - No AppLayout */}
+          <Route path="/customer" element={<CustomerPortal />} />
+          <Route path="/appointment/:token" element={<AppointmentConfirmation />} />
+          
+          {/* Main App Routes - With AppLayout */}
+          <Route element={<AppLayout><Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/call-intake" element={<CallIntake />} />
             <Route path="/jobs" element={<Jobs />} />
             <Route path="/jobs/:id" element={<JobDetail />} />
+            <Route path="/projects/:projectId" element={<GanttChart />} />
             <Route path="/projects" element={<PlaceholderPage title="Projects" subtitle="Multi-day install projects and phases" />} />
             <Route path="/sales" element={<PlaceholderPage title="Sales" subtitle="Quotes, proposals, and close tracking" />} />
             <Route path="/estimates" element={<Estimates />} />
@@ -47,9 +56,9 @@ const App = () => (
             <Route path="/sites" element={<PlaceholderPage title="Sites" subtitle="Multi-site locations and access instructions" />} />
             <Route path="/technicians" element={<Technicians />} />
             <Route path="/technicians/:id" element={<TechnicianDetail />} />
-            <Route path="/appointment/:token" element={<AppointmentConfirmation />} />
             <Route path="/schedule" element={<Schedule />} />
             <Route path="/maintenance" element={<MaintenanceSchedules />} />
+            <Route path="/maintenance-agreements" element={<MaintenanceAgreements />} />
             <Route path="/checklists" element={<PlaceholderPage title="Checklists" subtitle="Installation evidence and quality verification" />} />
             <Route path="/agreements" element={<ServiceAgreements />} />
             <Route path="/invoices" element={<Invoices />} />
@@ -57,8 +66,8 @@ const App = () => (
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/settings" element={<PlaceholderPage title="Settings" subtitle="Roles, permissions, and system configuration" />} />
             <Route path="*" element={<NotFound />} />
-          </Routes>
-        </AppLayout>
+          </Routes></AppLayout>} />
+        </Routes>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
