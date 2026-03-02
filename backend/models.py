@@ -55,6 +55,891 @@ class UserResponse(BaseModel):
     role: RoleType
     created_at: datetime
 
+# ==================== RBAC - ROLES & PERMISSIONS (RFC-002 Section 4.9) ====================
+
+class Permission(BaseModel):
+    """Fine-grained permission for RBAC"""
+    module: str  # e.g., "jobs", "leads", "inventory", "financials"
+    action: str  # e.g., "create", "read", "update", "delete", "approve"
+    allowed: bool = True
+
+class Role(BaseModel):
+    """Role definition with permissions"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str  # e.g., "Technician", "Lead Tech", "Dispatcher", "Manager", "Admin"
+    display_name: str
+    description: Optional[str] = None
+    permissions: List[Permission] = []
+    is_system: bool = False  # System roles cannot be deleted
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class RoleCreate(BaseModel):
+    name: str
+    display_name: str
+    description: Optional[str] = None
+    permissions: List[Permission] = []
+
+# Default system roles per RFC-002
+DEFAULT_ROLES = [
+    {"name": "technician", "display_name": "Technician", "description": "Field technician with basic job access"},
+    {"name": "lead_tech", "display_name": "Lead Technician", "description": "Senior tech with crew oversight"},
+    {"name": "dispatcher", "display_name": "Dispatcher", "description": "Manages scheduling and dispatch"},
+    {"name": "manager", "display_name": "Manager", "description": "Branch/department manager"},
+    {"name": "admin", "display_name": "Administrator", "description": "Full system access"},
+    {"name": "accountant", "display_name": "Accountant", "description": "Financial access only"},
+    {"name": "sales", "display_name": "Sales Representative", "description": "Leads, quotes, and proposals"},
+    {"name": "owner", "display_name": "Owner/GM", "description": "Business owner with all access"},
+]
+
+# ==================== LEADS (RFC-002 Section 4.1.1) ====================
+
+class Lead(BaseModel):
+    """Lead management per RFC-002"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    lead_number: str = Field(default_factory=lambda: f"LEAD-{str(uuid.uuid4())[:8].upper()}")
+    
+    # Contact info
+    contact_name: str
+    contact_email: Optional[str] = None
+    contact_phone: Optional[str] = None
+    company_name: Optional[str] = None
+    
+    # Address
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    zip_code: Optional[str] = None
+    
+    # Lead details
+    source: str  # e.g., "website", "referral", "google_ads", "facebook", "walk_in", "phone"
+    source_detail: Optional[str] = None  # Campaign name, referrer name, etc.
+    preferred_contact_method: Literal["phone", "email", "text", "any"] = "any"
+    
+    # Status workflow per RFC-002: New → Contacted → Qualified → Quoted → Won/Lost
+    status: LeadStatus = "new"
+    status_changed_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    # Assignment
+    assigned_to_id: Optional[str] = None
+    assigned_to_name: Optional[str] = None
+    
+    # Tracking
+    first_contact_at: Optional[datetime] = None
+    qualified_at: Optional[datetime] = None
+    quoted_at: Optional[datetime] = None
+    closed_at: Optional[datetime] = None
+    close_reason: Optional[str] = None  # Won/Lost reason
+    
+    # Related records
+    converted_customer_id: Optional[str] = None
+    converted_job_id: Optional[str] = None
+    proposal_ids: List[str] = []
+    
+    # Metadata
+    notes: Optional[str] = None
+    tags: List[str] = []
+    estimated_value: float = 0
+    priority: Literal["low", "normal", "high", "urgent"] = "normal"
+    
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class LeadCreate(BaseModel):
+    contact_name: str
+    contact_email: Optional[str] = None
+    contact_phone: Optional[str] = None
+    company_name: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    zip_code: Optional[str] = None
+    source: str = "website"
+    source_detail: Optional[str] = None
+    preferred_contact_method: Literal["phone", "email", "text", "any"] = "any"
+    notes: Optional[str] = None
+    tags: List[str] = []
+    estimated_value: float = 0
+    priority: Literal["low", "normal", "high", "urgent"] = "normal"
+
+class LeadUpdate(BaseModel):
+    contact_name: Optional[str] = None
+    contact_email: Optional[str] = None
+    contact_phone: Optional[str] = None
+    company_name: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    zip_code: Optional[str] = None
+    source: Optional[str] = None
+    source_detail: Optional[str] = None
+    preferred_contact_method: Optional[Literal["phone", "email", "text", "any"]] = None
+    status: Optional[LeadStatus] = None
+    assigned_to_id: Optional[str] = None
+    notes: Optional[str] = None
+    tags: Optional[List[str]] = None
+    estimated_value: Optional[float] = None
+    priority: Optional[Literal["low", "normal", "high", "urgent"]] = None
+    close_reason: Optional[str] = None
+
+# ==================== PCB - POTENTIAL CALLBACKS (RFC-002 Section 4.1.2) ====================
+
+class PCB(BaseModel):
+    """Potential Callback per RFC-002"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    pcb_number: str = Field(default_factory=lambda: f"PCB-{str(uuid.uuid4())[:8].upper()}")
+    
+    # Linked records
+    lead_id: Optional[str] = None
+    job_id: Optional[str] = None
+    customer_id: Optional[str] = None
+    customer_name: Optional[str] = None
+    
+    # PCB details
+    reason: str  # Why a callback is needed
+    reason_category: Literal["follow_up", "upsell", "warranty", "complaint", "question", "other"] = "follow_up"
+    
+    # Status workflow per RFC-002: Created → Assigned → Follow-Up → Converted/Closed
+    status: PCBStatus = "created"
+    status_changed_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    # Assignment
+    assigned_technician_id: Optional[str] = None
+    assigned_technician_name: Optional[str] = None
+    assigned_owner_id: Optional[str] = None
+    assigned_owner_name: Optional[str] = None
+    
+    # Follow-up scheduling
+    follow_up_date: Optional[str] = None
+    follow_up_time: Optional[str] = None
+    reminder_sent: bool = False
+    reminder_count: int = 0
+    
+    # Resolution
+    converted_to_job_id: Optional[str] = None
+    resolution_notes: Optional[str] = None
+    resolved_at: Optional[datetime] = None
+    
+    # Metadata
+    priority: Literal["low", "normal", "high", "urgent"] = "normal"
+    notes: Optional[str] = None
+    
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class PCBCreate(BaseModel):
+    lead_id: Optional[str] = None
+    job_id: Optional[str] = None
+    customer_id: Optional[str] = None
+    customer_name: Optional[str] = None
+    reason: str
+    reason_category: Literal["follow_up", "upsell", "warranty", "complaint", "question", "other"] = "follow_up"
+    assigned_technician_id: Optional[str] = None
+    assigned_owner_id: Optional[str] = None
+    follow_up_date: Optional[str] = None
+    follow_up_time: Optional[str] = None
+    priority: Literal["low", "normal", "high", "urgent"] = "normal"
+    notes: Optional[str] = None
+
+class PCBUpdate(BaseModel):
+    reason: Optional[str] = None
+    reason_category: Optional[Literal["follow_up", "upsell", "warranty", "complaint", "question", "other"]] = None
+    status: Optional[PCBStatus] = None
+    assigned_technician_id: Optional[str] = None
+    assigned_owner_id: Optional[str] = None
+    follow_up_date: Optional[str] = None
+    follow_up_time: Optional[str] = None
+    priority: Optional[Literal["low", "normal", "high", "urgent"]] = None
+    notes: Optional[str] = None
+    resolution_notes: Optional[str] = None
+
+# ==================== PROPOSALS (RFC-002 Section 4.1.3) ====================
+
+class ProposalLineItem(BaseModel):
+    """Line item in a proposal"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    item_type: Literal["equipment", "labor", "material", "misc", "discount"] = "equipment"
+    
+    # Item details
+    name: str
+    description: Optional[str] = None
+    sku: Optional[str] = None
+    
+    # Equipment specific
+    manufacturer: Optional[str] = None
+    model: Optional[str] = None
+    warranty_years: Optional[int] = None
+    
+    # Pricing
+    quantity: float = 1
+    unit: str = "each"
+    unit_price: float = 0
+    extended_price: float = 0  # quantity * unit_price
+    
+    # Cost tracking
+    unit_cost: float = 0
+    margin_percent: float = 0
+
+class ProposalOption(BaseModel):
+    """Good/Better/Best proposal option per RFC-002"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    tier: Literal["good", "better", "best"] = "good"
+    name: str  # e.g., "Standard System", "High Efficiency", "Premium"
+    description: Optional[str] = None
+    
+    line_items: List[ProposalLineItem] = []
+    
+    # Pricing summary
+    equipment_total: float = 0
+    labor_total: float = 0
+    materials_total: float = 0
+    misc_total: float = 0
+    subtotal: float = 0
+    discount_amount: float = 0
+    tax_amount: float = 0
+    total: float = 0
+    
+    # Financing
+    financing_available: bool = False
+    monthly_payment: Optional[float] = None
+    financing_term_months: Optional[int] = None
+    financing_apr: Optional[float] = None
+    
+    is_recommended: bool = False
+
+class Proposal(BaseModel):
+    """Sales proposal per RFC-002"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    proposal_number: str = Field(default_factory=lambda: f"PROP-{str(uuid.uuid4())[:8].upper()}")
+    
+    # Related records
+    lead_id: Optional[str] = None
+    job_id: Optional[str] = None
+    customer_id: Optional[str] = None
+    
+    # Customer info
+    customer_name: str
+    customer_email: Optional[str] = None
+    customer_phone: Optional[str] = None
+    site_address: str
+    
+    # Proposal details
+    title: str
+    description: Optional[str] = None
+    
+    # Good/Better/Best options
+    options: List[ProposalOption] = []
+    selected_option_id: Optional[str] = None
+    
+    # Status per RFC-002
+    status: ProposalStatus = "draft"
+    status_changed_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    # Dates
+    valid_until: Optional[str] = None
+    sent_at: Optional[datetime] = None
+    viewed_at: Optional[datetime] = None
+    accepted_at: Optional[datetime] = None
+    
+    # Created by
+    created_by_id: Optional[str] = None
+    created_by_name: Optional[str] = None
+    
+    # Signatures
+    customer_signature: Optional[str] = None
+    customer_signed_at: Optional[datetime] = None
+    
+    # Converted
+    converted_job_id: Optional[str] = None
+    
+    notes: Optional[str] = None
+    internal_notes: Optional[str] = None
+    
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class ProposalCreate(BaseModel):
+    lead_id: Optional[str] = None
+    job_id: Optional[str] = None
+    customer_id: Optional[str] = None
+    customer_name: str
+    customer_email: Optional[str] = None
+    customer_phone: Optional[str] = None
+    site_address: str
+    title: str
+    description: Optional[str] = None
+    valid_until: Optional[str] = None
+    notes: Optional[str] = None
+
+# ==================== JOB TYPES & TEMPLATES (RFC-002 Section 4.2.1) ====================
+
+class ChecklistItemTemplate(BaseModel):
+    """Checklist item definition per RFC-002 Section 4.2.2"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    order: int = 0
+    description: str  # Minimum 10 words recommended
+    
+    # Required evidence flags
+    requires_before_photo: bool = False
+    requires_after_photo: bool = False
+    requires_note: bool = False
+    requires_measurement: bool = False
+    requires_signature: bool = False
+    
+    # Options
+    is_required: bool = True
+    allow_exception: bool = True  # "Forgot before picture" exception
+    exception_requires_reason: bool = True
+
+class JobTypeTemplate(BaseModel):
+    """Job type template per RFC-002 Section 4.2.1"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    
+    name: str  # e.g., "Residential AC Install", "Commercial RTU Service"
+    category: JobTypeCategory
+    description: Optional[str] = None
+    
+    # Default settings
+    default_priority: Literal["low", "normal", "high", "urgent"] = "normal"
+    estimated_duration_hours: float = 2.0
+    requires_permit: bool = False
+    requires_inspection: bool = False
+    
+    # Pricing defaults
+    base_labor_rate: float = 0
+    trip_charge: float = 0
+    
+    # Checklist template
+    checklist_items: List[ChecklistItemTemplate] = []
+    
+    # Version control per RFC-002
+    version: int = 1
+    is_active: bool = True
+    previous_version_id: Optional[str] = None
+    
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class JobTypeTemplateCreate(BaseModel):
+    name: str
+    category: JobTypeCategory
+    description: Optional[str] = None
+    default_priority: Literal["low", "normal", "high", "urgent"] = "normal"
+    estimated_duration_hours: float = 2.0
+    requires_permit: bool = False
+    requires_inspection: bool = False
+    base_labor_rate: float = 0
+    trip_charge: float = 0
+    checklist_items: List[ChecklistItemTemplate] = []
+
+# ==================== EVIDENCE-BASED CHECKLISTS (RFC-002 Section 4.2.2) ====================
+
+class ChecklistItemEvidence(BaseModel):
+    """Evidence attached to a checklist item"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    evidence_type: EvidenceType
+    
+    # Photo evidence
+    photo_url: Optional[str] = None
+    photo_data: Optional[str] = None  # Base64 for mobile upload
+    photo_taken_at: Optional[datetime] = None
+    
+    # Measurement evidence
+    measurement_value: Optional[float] = None
+    measurement_unit: Optional[str] = None
+    
+    # Note evidence
+    note_text: Optional[str] = None
+    
+    # Signature evidence
+    signature_data: Optional[str] = None
+    signature_name: Optional[str] = None
+    
+    # Metadata
+    captured_by_id: Optional[str] = None
+    captured_by_name: Optional[str] = None
+    captured_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    # GPS location
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+class JobChecklistItem(BaseModel):
+    """Individual checklist item on a job"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    template_item_id: Optional[str] = None
+    order: int = 0
+    description: str
+    
+    # Requirements (from template)
+    requires_before_photo: bool = False
+    requires_after_photo: bool = False
+    requires_note: bool = False
+    requires_measurement: bool = False
+    requires_signature: bool = False
+    is_required: bool = True
+    
+    # Status per RFC-002: Not Started / In Progress / Done / Exception
+    status: Literal["not_started", "in_progress", "completed", "exception"] = "not_started"
+    
+    # Evidence collected
+    evidence: List[ChecklistItemEvidence] = []
+    
+    # Exception handling per RFC-002 "Forgot before picture"
+    has_exception: bool = False
+    exception_reason: Optional[str] = None
+    exception_approved_by: Optional[str] = None
+    
+    # Completion
+    completed_at: Optional[datetime] = None
+    completed_by_id: Optional[str] = None
+    completed_by_name: Optional[str] = None
+
+class JobChecklist(BaseModel):
+    """Complete checklist for a job"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    job_id: str
+    template_id: Optional[str] = None
+    template_name: Optional[str] = None
+    
+    items: List[JobChecklistItem] = []
+    
+    # Overall progress
+    total_items: int = 0
+    completed_items: int = 0
+    exception_items: int = 0
+    percent_complete: int = 0
+    
+    # Per RFC-002: Jobs cannot be set to "Complete" until required items satisfied
+    can_complete_job: bool = False
+    blocking_items: List[str] = []  # IDs of items blocking completion
+    
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+# ==================== VENDORS & PURCHASE ORDERS (RFC-002 Section 4.7.2) ====================
+
+class Vendor(BaseModel):
+    """Vendor/supplier record per RFC-002"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    vendor_number: str = Field(default_factory=lambda: f"VND-{str(uuid.uuid4())[:8].upper()}")
+    
+    name: str
+    contact_name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    
+    # Address
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    zip_code: Optional[str] = None
+    
+    # Payment terms
+    payment_terms: str = "Net 30"  # e.g., "Net 30", "Net 15", "COD"
+    credit_limit: Optional[float] = None
+    
+    # Catalog
+    default_items: List[str] = []  # Item IDs commonly ordered
+    
+    # Metadata
+    account_number: Optional[str] = None
+    website: Optional[str] = None
+    notes: Optional[str] = None
+    is_active: bool = True
+    
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class VendorCreate(BaseModel):
+    name: str
+    contact_name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    zip_code: Optional[str] = None
+    payment_terms: str = "Net 30"
+    account_number: Optional[str] = None
+    notes: Optional[str] = None
+
+class PurchaseOrderLineItem(BaseModel):
+    """Line item on a purchase order"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    item_id: str
+    item_name: str
+    sku: str
+    
+    quantity_ordered: int
+    quantity_received: int = 0
+    unit: str = "each"
+    unit_cost: float = 0
+    extended_cost: float = 0
+    
+    # Received tracking
+    received_at: Optional[datetime] = None
+    received_by_id: Optional[str] = None
+    received_to_location: Optional[str] = None  # Warehouse or truck ID
+
+class PurchaseOrder(BaseModel):
+    """Purchase order per RFC-002"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    po_number: str = Field(default_factory=lambda: f"PO-{str(uuid.uuid4())[:8].upper()}")
+    
+    vendor_id: str
+    vendor_name: str
+    
+    # Line items
+    line_items: List[PurchaseOrderLineItem] = []
+    
+    # Totals
+    subtotal: float = 0
+    tax_amount: float = 0
+    shipping_amount: float = 0
+    total: float = 0
+    
+    # Status
+    status: POStatus = "draft"
+    status_changed_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    # Dates
+    order_date: Optional[str] = None
+    expected_date: Optional[str] = None
+    received_date: Optional[str] = None
+    
+    # Receive to location
+    receive_to_location_id: Optional[str] = None  # Warehouse or truck
+    receive_to_location_name: Optional[str] = None
+    
+    # Linked records
+    job_id: Optional[str] = None
+    restock_request_id: Optional[str] = None
+    
+    notes: Optional[str] = None
+    
+    created_by_id: Optional[str] = None
+    created_by_name: Optional[str] = None
+    
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class PurchaseOrderCreate(BaseModel):
+    vendor_id: str
+    line_items: List[dict] = []  # [{item_id, quantity_ordered, unit_cost}]
+    expected_date: Optional[str] = None
+    receive_to_location_id: Optional[str] = None
+    job_id: Optional[str] = None
+    notes: Optional[str] = None
+
+# ==================== WAREHOUSE/LOCATION INVENTORY (RFC-002 Section 4.7.1) ====================
+
+class WarehouseLocation(BaseModel):
+    """Warehouse/branch location for multi-location inventory"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    
+    name: str
+    location_type: Literal["warehouse", "branch", "truck"] = "warehouse"
+    
+    # Address
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    zip_code: Optional[str] = None
+    
+    # Manager
+    manager_id: Optional[str] = None
+    manager_name: Optional[str] = None
+    
+    # Settings
+    is_primary: bool = False
+    is_active: bool = True
+    
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class LocationInventoryItem(BaseModel):
+    """Inventory quantity at a specific location"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    location_id: str
+    location_name: str
+    item_id: str
+    item_name: str
+    sku: str
+    
+    quantity: int = 0
+    min_threshold: int = 0
+    max_threshold: int = 100
+    
+    # Last activity
+    last_counted_at: Optional[datetime] = None
+    last_adjusted_at: Optional[datetime] = None
+    
+    # Serialized items
+    serial_numbers: List[str] = []
+
+class InventoryTransfer(BaseModel):
+    """Transfer between locations per RFC-002"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    transfer_number: str = Field(default_factory=lambda: f"TRF-{str(uuid.uuid4())[:8].upper()}")
+    
+    from_location_id: str
+    from_location_name: str
+    to_location_id: str
+    to_location_name: str
+    
+    items: List[dict] = []  # [{item_id, item_name, quantity, serial_numbers}]
+    
+    status: Literal["pending", "in_transit", "received", "cancelled"] = "pending"
+    
+    requested_by_id: Optional[str] = None
+    requested_by_name: Optional[str] = None
+    received_by_id: Optional[str] = None
+    received_by_name: Optional[str] = None
+    
+    requested_at: datetime = Field(default_factory=datetime.utcnow)
+    shipped_at: Optional[datetime] = None
+    received_at: Optional[datetime] = None
+    
+    notes: Optional[str] = None
+
+# ==================== INVOICES (RFC-002 Section 4.6.1) ====================
+
+class InvoiceLineItem(BaseModel):
+    """Invoice line item"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    line_type: Literal["labor", "parts", "trip", "misc", "discount", "tax"] = "parts"
+    
+    description: str
+    sku: Optional[str] = None
+    
+    quantity: float = 1
+    unit: str = "each"
+    unit_price: float = 0
+    extended_price: float = 0
+    
+    # Markup tracking per RFC-002 formula
+    cost: float = 0
+    markup_percent: float = 0
+
+class Invoice(BaseModel):
+    """Invoice per RFC-002 Section 4.6.1"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    invoice_number: str = Field(default_factory=lambda: f"INV-{str(uuid.uuid4())[:8].upper()}")
+    
+    # Linked records
+    job_id: Optional[str] = None
+    job_number: Optional[str] = None
+    customer_id: Optional[str] = None
+    
+    # Customer info
+    customer_name: str
+    customer_email: Optional[str] = None
+    customer_phone: Optional[str] = None
+    billing_address: Optional[str] = None
+    
+    # Line items
+    line_items: List[InvoiceLineItem] = []
+    
+    # Totals per RFC-002 formula: Price = (LaborRate × Hours) + (PartsCost × Markup) + TripFee
+    labor_total: float = 0
+    parts_total: float = 0
+    trip_total: float = 0
+    misc_total: float = 0
+    subtotal: float = 0
+    discount_amount: float = 0
+    tax_rate: float = 0
+    tax_amount: float = 0
+    total: float = 0
+    
+    # Status per RFC-002: Draft / Sent / Partially Paid / Paid / Void
+    status: InvoiceStatus = "draft"
+    status_changed_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    # Payment tracking
+    amount_paid: float = 0
+    balance_due: float = 0
+    
+    # Dates
+    invoice_date: str = Field(default_factory=lambda: datetime.utcnow().strftime("%Y-%m-%d"))
+    due_date: Optional[str] = None
+    paid_date: Optional[str] = None
+    
+    # Notifications per RFC-002
+    reminder_sent: bool = False
+    past_due_alert_sent: bool = False
+    
+    notes: Optional[str] = None
+    internal_notes: Optional[str] = None
+    
+    created_by_id: Optional[str] = None
+    created_by_name: Optional[str] = None
+    
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class InvoiceCreate(BaseModel):
+    job_id: Optional[str] = None
+    customer_id: Optional[str] = None
+    customer_name: str
+    customer_email: Optional[str] = None
+    billing_address: Optional[str] = None
+    line_items: List[dict] = []
+    tax_rate: float = 0
+    due_date: Optional[str] = None
+    notes: Optional[str] = None
+
+# ==================== PAYMENTS (RFC-002 Section 4.6.1) ====================
+
+class Payment(BaseModel):
+    """Payment record"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    payment_number: str = Field(default_factory=lambda: f"PAY-{str(uuid.uuid4())[:8].upper()}")
+    
+    invoice_id: str
+    invoice_number: Optional[str] = None
+    customer_id: Optional[str] = None
+    customer_name: Optional[str] = None
+    
+    # Payment details per RFC-002: Card, ACH, check, cash, financing; split payments
+    payment_method: Literal["card", "ach", "check", "cash", "financing", "other"] = "card"
+    amount: float
+    
+    # Card details (masked)
+    card_last_four: Optional[str] = None
+    card_brand: Optional[str] = None
+    
+    # Check details
+    check_number: Optional[str] = None
+    
+    # Financing
+    financing_provider: Optional[str] = None
+    financing_reference: Optional[str] = None
+    
+    # Transaction
+    transaction_id: Optional[str] = None
+    processed_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    # Status
+    status: Literal["pending", "completed", "failed", "refunded"] = "completed"
+    
+    notes: Optional[str] = None
+    
+    collected_by_id: Optional[str] = None
+    collected_by_name: Optional[str] = None
+    
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class PaymentCreate(BaseModel):
+    invoice_id: str
+    payment_method: Literal["card", "ach", "check", "cash", "financing", "other"] = "card"
+    amount: float
+    card_last_four: Optional[str] = None
+    check_number: Optional[str] = None
+    financing_provider: Optional[str] = None
+    notes: Optional[str] = None
+
+# ==================== CUSTOMER EQUIPMENT (RFC-002 Section 4.7.4) ====================
+
+class CustomerEquipment(BaseModel):
+    """Customer equipment/asset record per RFC-002"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    
+    customer_id: str
+    customer_name: Optional[str] = None
+    site_address: Optional[str] = None
+    
+    # Equipment details
+    equipment_type: str  # e.g., "AC Unit", "Furnace", "Heat Pump"
+    manufacturer: Optional[str] = None
+    model: Optional[str] = None
+    serial_number: Optional[str] = None
+    
+    # Location
+    location_in_building: Optional[str] = None  # e.g., "Attic", "Basement", "Roof"
+    
+    # Installation
+    install_date: Optional[str] = None
+    installed_by_company: Optional[str] = None
+    
+    # Warranty tracking per RFC-002
+    warranty_start_date: Optional[str] = None
+    warranty_end_date: Optional[str] = None
+    warranty_type: Literal["manufacturer", "extended", "labor", "parts", "full"] = "manufacturer"
+    warranty_provider: Optional[str] = None
+    warranty_terms: Optional[str] = None
+    
+    # Status flags per RFC-002
+    is_in_warranty: bool = False
+    warranty_expiring_soon: bool = False  # Within 30 days
+    
+    # Service history
+    last_service_date: Optional[str] = None
+    next_service_date: Optional[str] = None
+    service_job_ids: List[str] = []
+    
+    notes: Optional[str] = None
+    is_active: bool = True
+    
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class CustomerEquipmentCreate(BaseModel):
+    customer_id: str
+    site_address: Optional[str] = None
+    equipment_type: str
+    manufacturer: Optional[str] = None
+    model: Optional[str] = None
+    serial_number: Optional[str] = None
+    location_in_building: Optional[str] = None
+    install_date: Optional[str] = None
+    warranty_start_date: Optional[str] = None
+    warranty_end_date: Optional[str] = None
+    warranty_type: Literal["manufacturer", "extended", "labor", "parts", "full"] = "manufacturer"
+    warranty_terms: Optional[str] = None
+    notes: Optional[str] = None
+
+# ==================== SYSTEM SETTINGS (RFC-002 Google Maps Toggle) ====================
+
+class SystemSettings(BaseModel):
+    """System-wide settings"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    
+    # Google Maps integration toggle
+    google_maps_enabled: bool = False
+    google_maps_api_key_set: bool = False
+    
+    # AI features toggle
+    ai_features_enabled: bool = False
+    
+    # Default tax rate
+    default_tax_rate: float = 0
+    
+    # Labor rates
+    default_labor_rate: float = 95.0
+    overtime_multiplier: float = 1.5
+    
+    # Trip charges
+    default_trip_charge: float = 89.0
+    
+    # Parts markup
+    default_parts_markup: float = 1.35  # 35% markup
+    
+    # Scheduling
+    default_job_duration_hours: float = 2.0
+    buffer_time_percent: float = 15  # 15% buffer per RFC-002
+    
+    # Stock check
+    require_shift_start_stock_check: bool = True
+    require_shift_end_stock_check: bool = False
+    
+    # Customer portal
+    customer_portal_enabled: bool = True
+    allow_customer_scheduling: bool = True
+    
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_by_id: Optional[str] = None
+
 # ==================== TECHNICIAN PROFILE ====================
 
 class Certification(BaseModel):
