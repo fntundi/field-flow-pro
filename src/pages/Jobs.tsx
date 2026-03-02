@@ -3,13 +3,22 @@ import StatusBadge from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Plus, Search, Filter, ChevronDown, ChevronRight, Phone, Wrench, ClipboardList, Calendar, MapPin, User, Building2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { useState, useEffect } from "react";
-import { Link, useSearchParams } from "react-router-dom";
-import { allJobs } from "@/data/jobs";
-import { callStatusMap, type Call } from "@/types/jobs";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+
+const allJobs = [
+  { id: "JOB-1042", customer: "Sarah Mitchell", address: "1423 Oak Ave, Dallas, TX", type: "Residential Install", tech: "Mike Johnson", status: "in_progress" as const, scheduled: "Feb 27, 2:30 PM", priority: "Normal" },
+  { id: "JOB-1041", customer: "Acme Corp", address: "500 Commerce St, Dallas, TX", type: "Commercial Repair", tech: "Lisa Chen", status: "complete" as const, scheduled: "Feb 27, 11:00 AM", priority: "High" },
+  { id: "JOB-1040", customer: "James Rivera", address: "812 Elm St, Plano, TX", type: "Maintenance", tech: "Tom Brown", status: "urgent" as const, scheduled: "Feb 27, 9:15 AM", priority: "Urgent" },
+  { id: "JOB-1039", customer: "Metro Office Park", address: "2100 N Central Expy, Richardson, TX", type: "Commercial Install", tech: "Amy Davis", status: "open" as const, scheduled: "Feb 28, 8:00 AM", priority: "Normal" },
+  { id: "JOB-1038", customer: "David Park", address: "3301 Mockingbird Ln, Dallas, TX", type: "Residential Repair", tech: "Mike Johnson", status: "complete" as const, scheduled: "Feb 26, 3:00 PM", priority: "Normal" },
+  { id: "JOB-1037", customer: "Linda Hayes", address: "905 Preston Rd, Frisco, TX", type: "Residential Install", tech: "Lisa Chen", status: "complete" as const, scheduled: "Feb 26, 10:00 AM", priority: "Normal" },
+  { id: "JOB-1036", customer: "TechHub Offices", address: "4400 Beltline Rd, Addison, TX", type: "Commercial Maintenance", tech: "Tom Brown", status: "pending" as const, scheduled: "Feb 28, 1:00 PM", priority: "Low" },
+  { id: "JOB-1035", customer: "Maria Santos", address: "667 Greenville Ave, Dallas, TX", type: "Emergency Repair", tech: "Amy Davis", status: "complete" as const, scheduled: "Feb 25, 7:30 PM", priority: "Urgent" },
+];
 
 const Jobs = () => {
-  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [expandedJob, setExpandedJob] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<"all" | "tech" | "sales">("all");
@@ -94,44 +103,39 @@ const Jobs = () => {
         </Button>
       </div>
 
-      {/* Jobs List */}
-      <div className="space-y-3">
-        {filtered.map((job) => {
-          const isExpanded = expandedJob === job.id;
-          const visibleCalls = getFilteredCalls(job.calls);
-          const completedCalls = job.calls.filter((c) => c.status === "complete").length;
-
-          return (
-            <motion.div key={job.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="metric-card !p-0 overflow-hidden">
-              {/* Job Header Row */}
-              <div className="flex items-center gap-4 px-5 py-4 cursor-pointer hover:bg-muted/30 transition-colors"
-                onClick={() => setExpandedJob(isExpanded ? null : job.id)}
+      {/* Jobs Table */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="metric-card !p-0 overflow-hidden"
+      >
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Job ID</th>
+              <th>Customer</th>
+              <th>Address</th>
+              <th>Type</th>
+              <th>Technician</th>
+              <th>Scheduled</th>
+              <th>Priority</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((job) => (
+              <tr
+                key={job.id}
+                className="cursor-pointer"
+                onClick={() => navigate(`/jobs/${job.id}`)}
               >
-                <button className="text-muted-foreground">
-                  {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                </button>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <Link to={`/jobs/${job.id}`} onClick={(e) => e.stopPropagation()} className="font-mono text-xs font-medium text-accent hover:underline">
-                      {job.id}
-                    </Link>
-                    <span className="text-sm font-semibold text-foreground">{job.customer}</span>
-                    <span className="text-xs text-muted-foreground flex items-center gap-1">
-                      <Building2 className="w-3 h-3" />{job.site}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-4 mt-1">
-                    <span className="text-xs text-muted-foreground">{job.type}</span>
-                    <span className="text-xs text-muted-foreground flex items-center gap-1">
-                      <MapPin className="w-3 h-3" />{job.siteAddress}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="text-right hidden md:block">
-                    <p className="text-xs text-muted-foreground">{completedCalls}/{job.calls.length} calls</p>
-                    <p className="text-xs text-muted-foreground">{job.estimatedDays} day{job.estimatedDays > 1 ? "s" : ""}</p>
-                  </div>
+                <td className="font-mono text-xs font-medium">{job.id}</td>
+                <td className="font-medium">{job.customer}</td>
+                <td className="text-muted-foreground text-xs">{job.address}</td>
+                <td className="text-muted-foreground">{job.type}</td>
+                <td>{job.tech}</td>
+                <td className="text-muted-foreground text-xs">{job.scheduled}</td>
+                <td>
                   <span className={`text-xs font-medium ${
                     job.priority === "Urgent" ? "text-destructive" :
                     job.priority === "High" ? "text-warning" : "text-muted-foreground"
