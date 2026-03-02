@@ -255,7 +255,14 @@ class TestJobTimeTracking:
         tech_id = test_data["technician_id"]
         job_id = test_data["job_id"]
         
-        # Start shift first
+        # Clean up any existing state
+        active_job = api_client.get(f"{BASE_URL}/api/time-tracking/job/active/{tech_id}")
+        if active_job.status_code == 200 and active_job.json().get("active"):
+            existing_entry = active_job.json()["entry"]
+            if existing_entry["status"] == "traveling":
+                api_client.post(f"{BASE_URL}/api/time-tracking/job/arrive/{existing_entry['id']}")
+            api_client.post(f"{BASE_URL}/api/time-tracking/job/complete/{existing_entry['id']}")
+        
         api_client.post(f"{BASE_URL}/api/time-tracking/shift/end?technician_id={tech_id}")
         api_client.post(f"{BASE_URL}/api/time-tracking/shift/start?technician_id={tech_id}")
         
@@ -278,8 +285,11 @@ class TestJobTimeTracking:
         assert "estimated_travel_minutes" in data
         assert "estimated_distance_miles" in data
         
-        # Store entry_id for next tests
-        return data["entry_id"]
+        # Clean up - complete the job entry
+        entry_id = data["entry_id"]
+        api_client.post(f"{BASE_URL}/api/time-tracking/job/arrive/{entry_id}")
+        api_client.post(f"{BASE_URL}/api/time-tracking/job/complete/{entry_id}")
+        api_client.post(f"{BASE_URL}/api/time-tracking/shift/end?technician_id={tech_id}")
     
     def test_full_job_flow(self, api_client, test_data):
         """Test complete job flow: dispatch -> arrive -> complete"""
