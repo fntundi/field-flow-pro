@@ -1,5 +1,7 @@
 import { ReactNode, useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import AppSidebar from "./AppSidebar";
+import Breadcrumbs from "./Breadcrumbs";
 import { Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -10,6 +12,10 @@ interface AppLayoutProps {
 const AppLayout = ({ children }: AppLayoutProps) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const location = useLocation();
+
+  // Check if this is a public page (no sidebar)
+  const isPublicPage = location.pathname.startsWith("/appointment/");
 
   useEffect(() => {
     const checkMobile = () => {
@@ -31,6 +37,11 @@ const AppLayout = ({ children }: AppLayoutProps) => {
     }
   };
 
+  // Render public pages without sidebar
+  if (isPublicPage) {
+    return <>{children}</>;
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* Mobile Header */}
@@ -44,7 +55,7 @@ const AppLayout = ({ children }: AppLayoutProps) => {
           {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </Button>
         <h1 className="ml-3 text-sm font-bold text-sidebar-accent-foreground">
-          HVAC Ops
+          BreezeFlow
         </h1>
       </header>
 
@@ -71,6 +82,7 @@ const AppLayout = ({ children }: AppLayoutProps) => {
             : "ml-[240px] p-6"
         }`}
       >
+        <Breadcrumbs />
         {children}
       </main>
     </div>
