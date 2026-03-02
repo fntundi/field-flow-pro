@@ -6310,6 +6310,330 @@ async def create_customer_equipment(data: CustomerEquipmentCreate):
     await db.customer_equipment.insert_one(equipment.dict())
     return equipment
 
+# ==================== SITES API ====================
+
+@api_router.get("/sites")
+async def get_sites(
+    customer_id: Optional[str] = None,
+    site_type: Optional[str] = None,
+    search: Optional[str] = None,
+    is_active: bool = True
+):
+    """Get all sites with optional filters"""
+    query = {"is_active": is_active}
+    
+    if customer_id:
+        query["customer_id"] = customer_id
+    
+    if site_type:
+        query["site_type"] = site_type
+    
+    if search:
+        safe_search = sanitize_string(search, 100)
+        query["$or"] = [
+            {"name": {"$regex": safe_search, "$options": "i"}},
+            {"address": {"$regex": safe_search, "$options": "i"}},
+            {"customer_name": {"$regex": safe_search, "$options": "i"}},
+        ]
+    
+    sites = await db.sites.find(query).sort("name", 1).to_list(500)
+    for s in sites:
+        s.pop("_id", None)
+    return sites
+
+@api_router.get("/sites/{site_id}")
+async def get_site(site_id: str):
+    """Get a specific site with full details"""
+    if not validate_uuid(site_id):
+        raise HTTPException(status_code=400, detail="Invalid site ID")
+    
+    site = await db.sites.find_one({"id": site_id})
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+    
+    site.pop("_id", None)
+    return site
+
+@api_router.get("/sites/{site_id}/jobs")
+async def get_site_jobs(site_id: str, limit: int = 20):
+    """Get job history for a site"""
+    if not validate_uuid(site_id):
+        raise HTTPException(status_code=400, detail="Invalid site ID")
+    
+    site = await db.sites.find_one({"id": site_id})
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+    
+    # Find jobs by site_id or matching address
+    jobs = await db.jobs.find({
+        "$or": [
+            {"site_id": site_id},
+            {"site_address": site["address"]}
+        ]
+    }).sort("created_at", -1).limit(limit).to_list(limit)
+    
+    for j in jobs:
+        j.pop("_id", None)
+    return jobs
+
+@api_router.get("/sites/{site_id}/equipment")
+async def get_site_equipment(site_id: str):
+    """Get equipment at a site"""
+    if not validate_uuid(site_id):
+        raise HTTPException(status_code=400, detail="Invalid site ID")
+    
+    site = await db.sites.find_one({"id": site_id})
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+    
+    if not site.get("equipment_ids"):
+        return []
+    
+    equipment = await db.customer_equipment.find({
+        "id": {"$in": site["equipment_ids"]}
+    }).to_list(100)
+    
+    for e in equipment:
+        e.pop("_id", None)
+    return equipment
+
+@api_router.post("/sites", response_model=Site)
+async def create_site(data: SiteCreate):
+    """Create a new site"""
+    # Verify customer exists
+    customer = await db.customers.find_one({"id": data.customer_id})
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    
+    site = Site(
+        customer_id=data.customer_id,
+        customer_name=customer.get("name"),
+        name=sanitize_string(data.name, 200),
+        site_type=data.site_type,
+        address=sanitize_string(data.address, 500),
+        city=sanitize_string(data.city, 100) if data.city else None,
+        state=sanitize_string(data.state, 50) if data.state else None,
+        zip_code=sanitize_string(data.zip_code, 20) if data.zip_code else None,
+        access_instructions=sanitize_string(data.access_instructions, 1000) if data.access_instructions else None,
+        gate_code=sanitize_string(data.gate_code, 50) if data.gate_code else None,
+        key_location=sanitize_string(data.key_location, 200) if data.key_location else None,
+        parking_notes=sanitize_string(data.parking_notes, 500) if data.parking_notes else None,
+        building_hours=sanitize_string(data.building_hours, 200) if data.building_hours else None,
+        contacts=data.contacts,
+        requires_appointment=data.requires_appointment,
+        has_pets=data.has_pets,
+        pet_notes=sanitize_string(data.pet_notes, 200) if data.pet_notes else None,
+        notes=sanitize_string(data.notes, 2000) if data.notes else None,
+    )
+    
+    await db.sites.insert_one(site.dict())
+    return site
+
+@api_router.put("/sites/{site_id}", response_model=Site)
+async def update_site(site_id: str, data: SiteUpdate):
+    """Update a site"""
+    if not validate_uuid(site_id):
+        raise HTTPException(status_code=400, detail="Invalid site ID")
+    
+    site = await db.sites.find_one({"id": site_id})
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+    
+    update_data = {}
+    if data.name is not None:
+        update_data["name"] = sanitize_string(data.name, 200)
+    if data.site_type is not None:
+        update_data["site_type"] = data.site_type
+    if data.address is not None:
+        update_data["address"] = sanitize_string(data.address, 500)
+    if data.city is not None:
+        update_data["city"] = sanitize_string(data.city, 100)
+    if data.state is not None:
+        update_data["state"] = sanitize_string(data.state, 50)
+    if data.zip_code is not None:
+        update_data["zip_code"] = sanitize_string(data.zip_code, 20)
+    if data.access_instructions is not None:
+        update_data["access_instructions"] = sanitize_string(data.access_instructions, 1000)
+    if data.gate_code is not None:
+        update_data["gate_code"] = sanitize_string(data.gate_code, 50)
+    if data.key_location is not None:
+        update_data["key_location"] = sanitize_string(data.key_location, 200)
+    if data.parking_notes is not None:
+        update_data["parking_notes"] = sanitize_string(data.parking_notes, 500)
+    if data.building_hours is not None:
+        update_data["building_hours"] = sanitize_string(data.building_hours, 200)
+    if data.contacts is not None:
+        update_data["contacts"] = [c.dict() for c in data.contacts]
+    if data.requires_appointment is not None:
+        update_data["requires_appointment"] = data.requires_appointment
+    if data.has_pets is not None:
+        update_data["has_pets"] = data.has_pets
+    if data.pet_notes is not None:
+        update_data["pet_notes"] = sanitize_string(data.pet_notes, 200)
+    if data.notes is not None:
+        update_data["notes"] = sanitize_string(data.notes, 2000)
+    if data.is_active is not None:
+        update_data["is_active"] = data.is_active
+    
+    update_data["updated_at"] = datetime.utcnow()
+    
+    await db.sites.update_one({"id": site_id}, {"$set": update_data})
+    
+    updated = await db.sites.find_one({"id": site_id})
+    updated.pop("_id", None)
+    return Site(**updated)
+
+@api_router.delete("/sites/{site_id}")
+async def delete_site(site_id: str):
+    """Soft delete a site (mark as inactive)"""
+    if not validate_uuid(site_id):
+        raise HTTPException(status_code=400, detail="Invalid site ID")
+    
+    site = await db.sites.find_one({"id": site_id})
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+    
+    await db.sites.update_one(
+        {"id": site_id},
+        {"$set": {"is_active": False, "updated_at": datetime.utcnow()}}
+    )
+    
+    return {"message": "Site deactivated", "id": site_id}
+
+@api_router.post("/sites/{site_id}/equipment/{equipment_id}")
+async def link_equipment_to_site(site_id: str, equipment_id: str):
+    """Link equipment to a site"""
+    if not validate_uuid(site_id) or not validate_uuid(equipment_id):
+        raise HTTPException(status_code=400, detail="Invalid ID format")
+    
+    site = await db.sites.find_one({"id": site_id})
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+    
+    equipment = await db.customer_equipment.find_one({"id": equipment_id})
+    if not equipment:
+        raise HTTPException(status_code=404, detail="Equipment not found")
+    
+    equipment_ids = site.get("equipment_ids", [])
+    if equipment_id not in equipment_ids:
+        equipment_ids.append(equipment_id)
+        await db.sites.update_one(
+            {"id": site_id},
+            {"$set": {"equipment_ids": equipment_ids, "updated_at": datetime.utcnow()}}
+        )
+    
+    # Also update the equipment record
+    await db.customer_equipment.update_one(
+        {"id": equipment_id},
+        {"$set": {"site_address": site["address"], "updated_at": datetime.utcnow()}}
+    )
+    
+    return {"message": "Equipment linked to site", "site_id": site_id, "equipment_id": equipment_id}
+
+@api_router.post("/sites/migrate-from-jobs")
+async def migrate_sites_from_jobs():
+    """
+    Auto-create sites from existing job addresses.
+    Groups jobs by customer_id + address to create unique sites.
+    """
+    # Get all jobs with addresses
+    jobs = await db.jobs.find({
+        "site_address": {"$exists": True, "$ne": ""}
+    }).to_list(10000)
+    
+    if not jobs:
+        return {"message": "No jobs found to migrate", "sites_created": 0}
+    
+    # Group by customer_id + normalized address
+    site_map = {}
+    for job in jobs:
+        customer_id = job.get("customer_id")
+        address = job.get("site_address", "").strip()
+        
+        if not customer_id or not address:
+            continue
+        
+        # Create a key for grouping
+        key = f"{customer_id}|{address.lower()}"
+        
+        if key not in site_map:
+            site_map[key] = {
+                "customer_id": customer_id,
+                "customer_name": job.get("customer_name"),
+                "address": address,
+                "city": job.get("site_city"),
+                "state": job.get("site_state"),
+                "zip_code": job.get("site_zip"),
+                "job_count": 0,
+                "job_ids": [],
+                "last_job_date": None,
+            }
+        
+        site_map[key]["job_count"] += 1
+        site_map[key]["job_ids"].append(job["id"])
+        
+        # Track most recent job
+        job_date = job.get("created_at")
+        if job_date:
+            if isinstance(job_date, str):
+                job_date = datetime.fromisoformat(job_date.replace("Z", "+00:00"))
+            if not site_map[key]["last_job_date"] or job_date > site_map[key]["last_job_date"]:
+                site_map[key]["last_job_date"] = job_date
+    
+    # Create sites
+    sites_created = 0
+    for key, site_data in site_map.items():
+        # Check if site already exists
+        existing = await db.sites.find_one({
+            "customer_id": site_data["customer_id"],
+            "address": {"$regex": f"^{site_data['address']}$", "$options": "i"}
+        })
+        
+        if existing:
+            # Update job count on existing site
+            await db.sites.update_one(
+                {"id": existing["id"]},
+                {"$set": {
+                    "total_jobs": site_data["job_count"],
+                    "last_service_date": site_data["last_job_date"].isoformat() if site_data["last_job_date"] else None,
+                    "updated_at": datetime.utcnow()
+                }}
+            )
+            continue
+        
+        # Generate site name
+        customer_name = site_data.get("customer_name", "Unknown")
+        name = f"{customer_name} - Primary" if site_data["job_count"] > 0 else customer_name
+        
+        site = Site(
+            customer_id=site_data["customer_id"],
+            customer_name=site_data.get("customer_name"),
+            name=name,
+            site_type="residential",  # Default, can be updated later
+            address=site_data["address"],
+            city=site_data.get("city"),
+            state=site_data.get("state"),
+            zip_code=site_data.get("zip_code"),
+            total_jobs=site_data["job_count"],
+            last_service_date=site_data["last_job_date"].isoformat() if site_data["last_job_date"] else None,
+        )
+        
+        await db.sites.insert_one(site.dict())
+        sites_created += 1
+        
+        # Update jobs with site_id reference
+        for job_id in site_data["job_ids"]:
+            await db.jobs.update_one(
+                {"id": job_id},
+                {"$set": {"site_id": site.id}}
+            )
+    
+    return {
+        "message": f"Migration complete",
+        "sites_created": sites_created,
+        "total_unique_addresses": len(site_map)
+    }
+
 # ==================== IMPORT WIZARDS API ====================
 
 @api_router.post("/import/validate")
