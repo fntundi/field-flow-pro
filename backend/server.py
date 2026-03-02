@@ -7924,24 +7924,27 @@ async def seed_database():
             phases=[
                 ProjectPhase(
                     name="Phase 1: Preparation",
-                    status="completed" if proj["percent_complete"] > 20 else "pending",
+                    status="completed" if proj["percent_complete"] > 20 else "not_started",
                     percent_complete=100 if proj["percent_complete"] > 20 else 0,
-                    planned_start_date=(datetime.utcnow() + timedelta(days=i * 7)).strftime("%Y-%m-%d"),
-                    planned_end_date=(datetime.utcnow() + timedelta(days=i * 7 + 3)).strftime("%Y-%m-%d"),
+                    start_date=(datetime.utcnow() + timedelta(days=i * 7)).strftime("%Y-%m-%d"),
+                    end_date=(datetime.utcnow() + timedelta(days=i * 7 + 3)).strftime("%Y-%m-%d"),
+                    duration_days=3,
                 ),
                 ProjectPhase(
                     name="Phase 2: Equipment Installation",
-                    status="in_progress" if proj["percent_complete"] > 20 else "pending",
+                    status="in_progress" if proj["percent_complete"] > 20 else "not_started",
                     percent_complete=50 if proj["percent_complete"] > 20 else 0,
-                    planned_start_date=(datetime.utcnow() + timedelta(days=i * 7 + 4)).strftime("%Y-%m-%d"),
-                    planned_end_date=(datetime.utcnow() + timedelta(days=i * 7 + 10)).strftime("%Y-%m-%d"),
+                    start_date=(datetime.utcnow() + timedelta(days=i * 7 + 4)).strftime("%Y-%m-%d"),
+                    end_date=(datetime.utcnow() + timedelta(days=i * 7 + 10)).strftime("%Y-%m-%d"),
+                    duration_days=6,
                 ),
                 ProjectPhase(
                     name="Phase 3: Testing & Commissioning",
-                    status="pending",
+                    status="not_started",
                     percent_complete=0,
-                    planned_start_date=(datetime.utcnow() + timedelta(days=i * 7 + 11)).strftime("%Y-%m-%d"),
-                    planned_end_date=(datetime.utcnow() + timedelta(days=i * 7 + 14)).strftime("%Y-%m-%d"),
+                    start_date=(datetime.utcnow() + timedelta(days=i * 7 + 11)).strftime("%Y-%m-%d"),
+                    end_date=(datetime.utcnow() + timedelta(days=i * 7 + 14)).strftime("%Y-%m-%d"),
+                    duration_days=3,
                 ),
             ]
         )
