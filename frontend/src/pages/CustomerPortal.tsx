@@ -39,12 +39,17 @@ import {
   AlertTriangle,
   Send,
   Home,
+  CalendarClock,
+  CreditCard,
 } from "lucide-react";
 import {
   customerPortalApi,
+  rescheduleRequestsApi,
+  stripePaymentsApi,
   CustomerAccount,
   ServiceRequest,
   MaintenanceAgreement,
+  RescheduleRequest,
 } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
