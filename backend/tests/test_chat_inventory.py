@@ -19,10 +19,42 @@ def api_client():
 @pytest.fixture(scope="module")
 def auth_token(api_client):
     """Get authentication token via demo login"""
-    response = api_client.post(f"{BASE_URL}/api/auth/demo-login", json={"role": "admin"})
+    # Demo admin credentials
+    demo_email = "demo-admin@breezeflow.com"
+    demo_password = "demo123"
+    
+    # Try to login first
+    response = api_client.post(f"{BASE_URL}/api/auth/login", json={
+        "email": demo_email,
+        "password": demo_password
+    })
+    
     if response.status_code == 200:
         data = response.json()
         return data.get("token")
+    
+    # If login fails, try to register first
+    register_response = api_client.post(f"{BASE_URL}/api/auth/register", json={
+        "email": demo_email,
+        "password": demo_password,
+        "name": "Demo Admin",
+        "role": "admin"
+    })
+    
+    if register_response.status_code == 200:
+        data = register_response.json()
+        return data.get("token")
+    
+    # Try login again after registration
+    response = api_client.post(f"{BASE_URL}/api/auth/login", json={
+        "email": demo_email,
+        "password": demo_password
+    })
+    
+    if response.status_code == 200:
+        data = response.json()
+        return data.get("token")
+    
     pytest.skip("Authentication failed - skipping authenticated tests")
 
 @pytest.fixture(scope="module")
