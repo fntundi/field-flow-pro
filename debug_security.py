@@ -6,7 +6,7 @@ Detailed security validation tests to identify specific issues
 import requests
 import json
 
-BASE_URL = "https://jira-style-dispatch.preview.emergentagent.com/api"
+BASE_URL = "https://field-service-mgmt-2.preview.emergentagent.com/api"
 HEADERS = {"Content-Type": "application/json"}
 
 def test_empty_uuid_issue():

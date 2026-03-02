@@ -13,7 +13,7 @@ from datetime import datetime
 from typing import Dict, Any, Optional
 
 # Configuration
-BASE_URL = "https://jira-style-dispatch.preview.emergentagent.com/api"
+BASE_URL = "https://field-service-mgmt-2.preview.emergentagent.com/api"
 HEADERS = {"Content-Type": "application/json"}
 
 class APITester:
