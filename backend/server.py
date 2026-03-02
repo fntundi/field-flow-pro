@@ -68,6 +68,7 @@ from models import (
     Invoice, InvoiceCreate, InvoiceLineItem,
     Payment, PaymentCreate,
     CustomerEquipment, CustomerEquipmentCreate,
+    Site, SiteCreate, SiteUpdate, SiteContact,
     SystemSettings,
 )
 
