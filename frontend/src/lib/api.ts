@@ -2292,6 +2292,30 @@ export const customerEquipmentApi = {
     }),
 };
 
+// ==================== CUSTOMERS API ====================
+
+export interface Customer {
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  notes?: string;
+  created_at?: string;
+}
+
+export const customersApi = {
+  getAll: (search?: string) => {
+    const query = search ? `?search=${encodeURIComponent(search)}` : '';
+    return fetchApi<Customer[]>(`/customers${query}`);
+  },
+  
+  getById: (id: string) => fetchApi<Customer>(`/customers/${id}`),
+};
+
 // ==================== SITES API ====================
 
 export interface SiteContact {
