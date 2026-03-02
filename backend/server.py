@@ -7584,13 +7584,23 @@ async def seed_database():
     job_ids = []
     job_statuses = ["open", "in_progress", "in_progress", "open", "pending", "open", "in_progress", "urgent"]
     for i, job_data in enumerate(jobs_data):
+        # Link to customer_id
+        cust_id = customer_ids.get(job_data.customer_name)
         job = Job(
             job_number=f"JOB-{1001 + i}",
             status=job_statuses[i % len(job_statuses)],
+            customer_id=cust_id,
             **job_data.dict()
         )
         await db.jobs.insert_one(job.dict())
         job_ids.append(job.id)
+        
+        # Update site job count
+        if cust_id:
+            await db.sites.update_one(
+                {"customer_id": cust_id},
+                {"$inc": {"total_jobs": 1}, "$set": {"last_service_date": datetime.utcnow().isoformat()}}
+            )
     
     # ===== TASKS =====
     tasks_data = [
