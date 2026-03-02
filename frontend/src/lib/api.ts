@@ -2747,3 +2747,109 @@ export const chatApi = {
     return new WebSocket(`${wsProtocol}//${wsBase}/ws/chat/${jobId}/${channel}?token=${token}`);
   },
 };
+
+
+// ==================== AI CONFIG API ====================
+
+export interface AIConfig {
+  primary_provider: 'gemini' | 'openai' | 'claude';
+  primary_model: string;
+  failover_providers: Array<{ provider: string; model: string }>;
+  failover_enabled: boolean;
+  fallback_to_simple: boolean;
+  max_retries: number;
+  total_requests: number;
+  failed_requests: number;
+  failover_count: number;
+  last_failure_at?: string;
+}
+
+export const aiConfigApi = {
+  getConfig: () => fetchApi<AIConfig>('/ai/config'),
+  
+  updateConfig: (data: Partial<AIConfig>) =>
+    fetchApi<{ message: string }>('/ai/config', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+};
+
+// ==================== QUICKBOOKS API ====================
+
+export interface QuickBooksStatus {
+  enabled: boolean;
+  configured: boolean;
+  connected: boolean;
+  last_sync?: string;
+  sync_settings: {
+    invoices: boolean;
+    payments: boolean;
+    customers: boolean;
+  };
+}
+
+export interface QuickBooksSyncLog {
+  id: string;
+  sync_type: 'invoice' | 'payment' | 'customer' | 'full';
+  direction: 'push' | 'pull' | 'bidirectional';
+  status: 'started' | 'completed' | 'failed' | 'partial';
+  items_synced: number;
+  items_failed: number;
+  errors: string[];
+  started_at: string;
+  completed_at?: string;
+}
+
+export const quickbooksApi = {
+  getStatus: () => fetchApi<QuickBooksStatus>('/integrations/quickbooks/status'),
+  
+  updateSettings: (data: Partial<QuickBooksStatus['sync_settings'] & { quickbooks_enabled: boolean }>) =>
+    fetchApi<{ message: string }>('/integrations/quickbooks/settings', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  
+  getAuthUrl: () => fetchApi<{ auth_url: string }>('/integrations/quickbooks/auth-url'),
+  
+  disconnect: () =>
+    fetchApi<{ message: string }>('/integrations/quickbooks/disconnect', {
+      method: 'POST',
+    }),
+  
+  triggerSync: (syncType: 'full' | 'invoices' | 'payments' | 'customers' = 'full') =>
+    fetchApi<{ message: string; sync_id: string }>('/integrations/quickbooks/sync', {
+      method: 'POST',
+      body: JSON.stringify({ sync_type: syncType }),
+    }),
+  
+  getSyncLogs: (limit: number = 10) =>
+    fetchApi<QuickBooksSyncLog[]>(`/integrations/quickbooks/sync-logs?limit=${limit}`),
+};
+
+// ==================== PUSH NOTIFICATIONS API ====================
+
+export interface PushSubscriptionInfo {
+  id: string;
+  device_type: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export const pushApi = {
+  getVapidKey: () => fetchApi<{ publicKey: string }>('/push/vapid-key'),
+  
+  subscribe: (subscription: PushSubscriptionJSON) =>
+    fetchApi<{ message: string; id: string }>('/push/subscribe', {
+      method: 'POST',
+      body: JSON.stringify({ subscription }),
+    }),
+  
+  unsubscribe: (endpoint: string) =>
+    fetchApi<{ message: string }>('/push/unsubscribe', {
+      method: 'POST',
+      body: JSON.stringify({ endpoint }),
+    }),
+  
+  getSubscriptions: () =>
+    fetchApi<PushSubscriptionInfo[]>('/push/subscriptions'),
+};
