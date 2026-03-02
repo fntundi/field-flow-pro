@@ -822,3 +822,365 @@ class TruckUpdate(BaseModel):
     last_inspection_date: Optional[str] = None
     next_inspection_date: Optional[str] = None
     notes: Optional[str] = None
+
+# ==================== ROUTING & MAPS ====================
+
+class RouteCalculation(BaseModel):
+    """Calculated route between two points"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    origin_address: str
+    origin_lat: Optional[float] = None
+    origin_lng: Optional[float] = None
+    destination_address: str
+    destination_lat: Optional[float] = None
+    destination_lng: Optional[float] = None
+    
+    # Calculated values
+    distance_meters: int = 0
+    distance_miles: float = 0
+    duration_seconds: int = 0
+    duration_minutes: float = 0
+    duration_in_traffic_seconds: Optional[int] = None
+    duration_in_traffic_minutes: Optional[float] = None
+    
+    # Route details
+    polyline: Optional[str] = None  # Encoded polyline for map display
+    summary: Optional[str] = None  # Route summary (e.g., "via I-35 N")
+    warnings: List[str] = []
+    
+    # Metadata
+    calculated_at: datetime = Field(default_factory=datetime.utcnow)
+    api_status: str = "OK"
+
+class RouteRequest(BaseModel):
+    origin: str  # Address or "lat,lng"
+    destination: str
+    departure_time: Optional[str] = None  # ISO format for traffic
+
+# ==================== MAINTENANCE AGREEMENTS ====================
+
+class MaintenanceAgreementTemplate(BaseModel):
+    """Template for maintenance agreement types"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str  # e.g., "Annual HVAC Maintenance", "Quarterly Service"
+    description: Optional[str] = None
+    frequency: Literal["monthly", "quarterly", "semi_annual", "annual"]
+    visits_per_year: int = 1
+    
+    # Pricing
+    base_price: float = 0
+    price_per_unit: float = 0  # For multiple units
+    
+    # Included services
+    included_services: List[str] = []  # e.g., ["Filter replacement", "Coil cleaning"]
+    
+    # Parts coverage
+    parts_discount_percent: float = 0  # e.g., 10% off parts
+    labor_discount_percent: float = 0
+    priority_response: bool = False  # Priority scheduling
+    
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class MaintenanceAgreement(BaseModel):
+    """Active maintenance agreement with a customer"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    agreement_number: str = Field(default_factory=lambda: f"MA-{str(uuid.uuid4())[:8].upper()}")
+    
+    # Customer info
+    customer_id: Optional[str] = None
+    customer_name: str
+    customer_email: Optional[str] = None
+    customer_phone: Optional[str] = None
+    service_address: str
+    
+    # Template reference
+    template_id: Optional[str] = None
+    template_name: Optional[str] = None
+    frequency: Literal["monthly", "quarterly", "semi_annual", "annual"]
+    
+    # Equipment covered
+    equipment: List[dict] = []  # [{type, model, serial_number, location}]
+    
+    # Dates
+    start_date: str
+    end_date: str
+    next_service_date: Optional[str] = None
+    last_service_date: Optional[str] = None
+    
+    # Pricing
+    annual_price: float = 0
+    payment_frequency: Literal["monthly", "quarterly", "annual"] = "annual"
+    
+    # Status
+    status: Literal["active", "pending", "expired", "cancelled"] = "active"
+    auto_renew: bool = True
+    renewal_reminder_sent: bool = False
+    
+    # Generated jobs
+    generated_job_ids: List[str] = []
+    
+    notes: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class MaintenanceAgreementCreate(BaseModel):
+    customer_name: str
+    customer_email: Optional[str] = None
+    customer_phone: Optional[str] = None
+    service_address: str
+    template_id: Optional[str] = None
+    frequency: Literal["monthly", "quarterly", "semi_annual", "annual"] = "annual"
+    equipment: List[dict] = []
+    start_date: str
+    end_date: Optional[str] = None  # Auto-calculate if not provided
+    annual_price: float = 0
+    payment_frequency: Literal["monthly", "quarterly", "annual"] = "annual"
+    auto_renew: bool = True
+    notes: Optional[str] = None
+
+# ==================== GANTT / PROJECT MANAGEMENT ====================
+
+class ProjectPhase(BaseModel):
+    """Phase within a multi-day install project"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    description: Optional[str] = None
+    start_date: str
+    end_date: str
+    duration_days: int = 1
+    
+    # Dependencies
+    depends_on: List[str] = []  # Phase IDs this depends on
+    
+    # Assignment
+    assigned_technician_ids: List[str] = []
+    
+    # Status
+    status: Literal["not_started", "in_progress", "completed", "blocked"] = "not_started"
+    percent_complete: int = 0
+    
+    # Milestones
+    milestones: List[dict] = []  # [{name, date, completed}]
+    
+    # Tasks within phase
+    task_ids: List[str] = []
+    
+    color: Optional[str] = None  # For Gantt display
+    notes: Optional[str] = None
+
+class InstallProject(BaseModel):
+    """Multi-day install project with Gantt tracking"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    project_number: str = Field(default_factory=lambda: f"PRJ-{str(uuid.uuid4())[:8].upper()}")
+    job_id: str  # Link to parent job
+    
+    name: str
+    description: Optional[str] = None
+    
+    # Customer
+    customer_name: str
+    site_address: str
+    
+    # Timeline
+    planned_start_date: str
+    planned_end_date: str
+    actual_start_date: Optional[str] = None
+    actual_end_date: Optional[str] = None
+    
+    # Phases
+    phases: List[ProjectPhase] = []
+    
+    # Resources
+    assigned_technician_ids: List[str] = []
+    equipment_required: List[dict] = []  # [{item_id, quantity}]
+    
+    # Budget
+    estimated_hours: float = 0
+    actual_hours: float = 0
+    estimated_cost: float = 0
+    actual_cost: float = 0
+    
+    # Status
+    status: Literal["planning", "scheduled", "in_progress", "completed", "on_hold", "cancelled"] = "planning"
+    percent_complete: int = 0
+    
+    # Billing milestones
+    billing_milestones: List[dict] = []  # [{name, percent, amount, invoiced}]
+    
+    notes: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class InstallProjectCreate(BaseModel):
+    job_id: str
+    name: str
+    description: Optional[str] = None
+    customer_name: str
+    site_address: str
+    planned_start_date: str
+    planned_end_date: str
+    estimated_hours: float = 0
+    estimated_cost: float = 0
+    notes: Optional[str] = None
+
+class ProjectPhaseCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    start_date: str
+    end_date: str
+    depends_on: List[str] = []
+    assigned_technician_ids: List[str] = []
+    color: Optional[str] = None
+
+# ==================== CUSTOMER PORTAL ====================
+
+class CustomerAccount(BaseModel):
+    """Customer account for self-service portal"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    email: str
+    password_hash: Optional[str] = None  # Hashed password
+    
+    # Profile
+    name: str
+    phone: Optional[str] = None
+    addresses: List[dict] = []  # [{address, is_primary}]
+    
+    # Authentication
+    email_verified: bool = False
+    verification_token: Optional[str] = None
+    verification_token_expires: Optional[datetime] = None
+    magic_link_token: Optional[str] = None
+    magic_link_expires: Optional[datetime] = None
+    
+    # Session
+    last_login: Optional[datetime] = None
+    
+    # Preferences
+    notification_preferences: dict = {
+        "email_reminders": True,
+        "sms_reminders": False,
+        "marketing": False
+    }
+    
+    # Status
+    status: Literal["active", "inactive", "suspended"] = "active"
+    
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class CustomerAccountCreate(BaseModel):
+    email: str
+    password: Optional[str] = None  # Optional if using magic link
+    name: str
+    phone: Optional[str] = None
+    address: Optional[str] = None
+
+class CustomerLogin(BaseModel):
+    email: str
+    password: Optional[str] = None
+
+class MagicLinkRequest(BaseModel):
+    email: str
+
+class ServiceRequest(BaseModel):
+    """Customer service request from portal"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    request_number: str = Field(default_factory=lambda: f"SR-{str(uuid.uuid4())[:8].upper()}")
+    
+    customer_id: str
+    customer_name: str
+    customer_email: str
+    
+    # Request details
+    service_type: Literal["repair", "maintenance", "installation", "inspection", "other"]
+    description: str
+    urgency: Literal["low", "normal", "high", "emergency"] = "normal"
+    
+    # Preferred times
+    preferred_dates: List[str] = []  # ISO date strings
+    preferred_time_of_day: Literal["morning", "afternoon", "evening", "anytime"] = "anytime"
+    
+    # Location
+    service_address: str
+    access_instructions: Optional[str] = None
+    
+    # Status
+    status: Literal["pending", "confirmed", "scheduled", "completed", "cancelled"] = "pending"
+    assigned_job_id: Optional[str] = None
+    
+    # Communication
+    notes: Optional[str] = None
+    internal_notes: Optional[str] = None
+    
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class ServiceRequestCreate(BaseModel):
+    service_type: Literal["repair", "maintenance", "installation", "inspection", "other"]
+    description: str
+    urgency: Literal["low", "normal", "high", "emergency"] = "normal"
+    preferred_dates: List[str] = []
+    preferred_time_of_day: Literal["morning", "afternoon", "evening", "anytime"] = "anytime"
+    service_address: str
+    access_instructions: Optional[str] = None
+
+# ==================== OFFLINE SYNC ====================
+
+class OfflineSyncQueue(BaseModel):
+    """Queue item for offline sync"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    
+    # Client info
+    client_id: str  # Device/browser identifier
+    user_id: Optional[str] = None
+    user_type: Literal["technician", "customer", "admin"] = "technician"
+    
+    # Operation
+    operation: Literal["create", "update", "delete"]
+    entity_type: str  # e.g., "job", "task", "time_entry"
+    entity_id: Optional[str] = None
+    
+    # Data
+    payload: dict = {}  # The data to sync
+    
+    # Timestamps
+    client_timestamp: datetime  # When action was taken offline
+    server_received_at: Optional[datetime] = None
+    
+    # Conflict resolution
+    status: Literal["pending", "synced", "conflict", "failed"] = "pending"
+    conflict_type: Optional[Literal["version_mismatch", "deleted", "concurrent_edit"]] = None
+    conflict_data: Optional[dict] = None  # Server version if conflict
+    resolution: Optional[Literal["client_wins", "server_wins", "merged", "manual"]] = None
+    resolved_at: Optional[datetime] = None
+    resolved_by: Optional[str] = None
+    
+    # Retry tracking
+    retry_count: int = 0
+    last_error: Optional[str] = None
+    
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class SyncBatch(BaseModel):
+    """Batch of offline changes to sync"""
+    client_id: str
+    user_id: Optional[str] = None
+    user_type: Literal["technician", "customer", "admin"] = "technician"
+    changes: List[dict]  # List of {operation, entity_type, entity_id, payload, client_timestamp}
+
+class ConflictResolution(BaseModel):
+    """Resolution for a sync conflict"""
+    queue_id: str
+    resolution: Literal["client_wins", "server_wins", "merged", "manual"]
+    merged_data: Optional[dict] = None  # If resolution is "merged"
+
+class SyncStatus(BaseModel):
+    """Status of sync operations for a client"""
+    client_id: str
+    pending_count: int = 0
+    synced_count: int = 0
+    conflict_count: int = 0
+    failed_count: int = 0
+    last_sync: Optional[datetime] = None
+    conflicts: List[dict] = []  # List of unresolved conflicts
