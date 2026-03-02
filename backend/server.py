@@ -6310,6 +6310,39 @@ async def create_customer_equipment(data: CustomerEquipmentCreate):
     await db.customer_equipment.insert_one(equipment.dict())
     return equipment
 
+# ==================== CUSTOMERS API ====================
+
+@api_router.get("/customers")
+async def get_customers(search: Optional[str] = None, limit: int = 100):
+    """Get all customers"""
+    query = {}
+    
+    if search:
+        safe_search = sanitize_string(search, 100)
+        query["$or"] = [
+            {"name": {"$regex": safe_search, "$options": "i"}},
+            {"email": {"$regex": safe_search, "$options": "i"}},
+            {"phone": {"$regex": safe_search, "$options": "i"}},
+        ]
+    
+    customers = await db.customers.find(query).sort("name", 1).limit(limit).to_list(limit)
+    for c in customers:
+        c.pop("_id", None)
+    return customers
+
+@api_router.get("/customers/{customer_id}")
+async def get_customer(customer_id: str):
+    """Get a specific customer"""
+    if not validate_uuid(customer_id):
+        raise HTTPException(status_code=400, detail="Invalid customer ID")
+    
+    customer = await db.customers.find_one({"id": customer_id})
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    
+    customer.pop("_id", None)
+    return customer
+
 # ==================== SITES API ====================
 
 @api_router.get("/sites")
