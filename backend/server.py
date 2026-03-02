@@ -2659,7 +2659,7 @@ async def get_jload_calculations_for_job(job_id: str):
 # Initialize Gemini client lazily
 _gemini_client = None
 
-def get_gemini_response(prompt: str, session_id: str = "default") -> str:
+async def get_gemini_response(prompt: str, session_id: str = "default") -> str:
     """Get response from Gemini using emergentintegrations"""
     api_key = os.environ.get("EMERGENT_LLM_KEY")
     if not api_key:
@@ -2677,9 +2677,9 @@ def get_gemini_response(prompt: str, session_id: str = "default") -> str:
     # Configure for Gemini
     client = client.with_model(provider="gemini", model="gemini-2.0-flash")
     
-    # Create user message and send
+    # Create user message and send (await since it's async)
     user_msg = UserMessage(text=prompt)
-    response = client.send_message(user_msg)
+    response = await client.send_message(user_msg)
     
     return response
 
@@ -2723,7 +2723,7 @@ Keep response concise and actionable."""
 
     try:
         session_id = f"scheduling-{str(uuid.uuid4())[:8]}"
-        response = get_gemini_response(prompt, session_id)
+        response = await get_gemini_response(prompt, session_id)
         return {
             "suggestions": response,
             "ai_model": "gemini-2.0-flash"
@@ -2773,7 +2773,7 @@ Use professional HVAC terminology. Keep it customer-friendly."""
 
     try:
         session_id = f"summary-{str(uuid.uuid4())[:8]}"
-        response = get_gemini_response(prompt, session_id)
+        response = await get_gemini_response(prompt, session_id)
         return {
             "summary": response,
             "ai_model": "gemini-2.0-flash"
