@@ -56,7 +56,7 @@ def sanitize_string(value: str, max_length: int = 1000) -> str:
     """Sanitize string input to prevent injection attacks"""
     if not value:
         return value
-    # Remove any control characters
+    # Remove any control characters (ASCII 0-31 and 127-159)
     value = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', value)
     # Truncate to max length
     return value[:max_length].strip()
