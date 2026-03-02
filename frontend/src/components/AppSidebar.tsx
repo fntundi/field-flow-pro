@@ -49,6 +49,7 @@ const navItems = [
   { to: "/invoices", icon: FileText, label: "Invoices" },
   { to: "/inventory", icon: Package, label: "Inventory" },
   { to: "/analytics", icon: BarChart3, label: "Analytics" },
+  { to: "/reports", icon: FileText, label: "Reports" },
   { to: "/import", icon: Upload, label: "Import Data" },
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
