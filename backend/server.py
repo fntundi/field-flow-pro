@@ -5200,7 +5200,10 @@ app.add_middleware(
 async def startup_event():
     """Initialize default data on startup"""
     await ensure_default_board_config()
-    logger.info("Application started, default board config ensured")
+    await ensure_default_roles()
+    await ensure_default_job_types()
+    await get_system_settings()  # Create default settings if not exists
+    logger.info("Application started, default configurations ensured")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
