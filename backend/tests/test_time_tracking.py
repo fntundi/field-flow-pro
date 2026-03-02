@@ -286,7 +286,15 @@ class TestJobTimeTracking:
         tech_id = test_data["technician_id"]
         job_id = test_data["job_id"]
         
-        # Clean up any existing state
+        # Clean up any existing state - complete any active job first
+        active_job = api_client.get(f"{BASE_URL}/api/time-tracking/job/active/{tech_id}")
+        if active_job.status_code == 200 and active_job.json().get("active"):
+            existing_entry = active_job.json()["entry"]
+            if existing_entry["status"] == "traveling":
+                api_client.post(f"{BASE_URL}/api/time-tracking/job/arrive/{existing_entry['id']}")
+            if existing_entry["status"] in ["traveling", "on_site"]:
+                api_client.post(f"{BASE_URL}/api/time-tracking/job/complete/{existing_entry['id']}")
+        
         api_client.post(f"{BASE_URL}/api/time-tracking/shift/end?technician_id={tech_id}")
         
         # Start shift
@@ -312,6 +320,7 @@ class TestJobTimeTracking:
         active_data = active_response.json()
         assert active_data["active"] == True
         assert active_data["entry"]["status"] == "traveling"
+        assert active_data["entry"]["id"] == entry_id  # Verify it's the correct entry
         
         # Arrive at job
         arrive_response = api_client.post(
@@ -323,9 +332,13 @@ class TestJobTimeTracking:
         assert arrive_data["message"] == "Arrived at job site"
         assert "actual_travel_minutes" in arrive_data
         
-        # Verify status changed to on_site
+        # Verify status changed to on_site - check the specific entry
         active_response2 = api_client.get(f"{BASE_URL}/api/time-tracking/job/active/{tech_id}")
-        assert active_response2.json()["entry"]["status"] == "on_site"
+        assert active_response2.status_code == 200
+        active_data2 = active_response2.json()
+        assert active_data2["active"] == True
+        assert active_data2["entry"]["id"] == entry_id
+        assert active_data2["entry"]["status"] == "on_site", f"Expected on_site but got {active_data2['entry']['status']}"
         
         # Complete job
         complete_response = api_client.post(
