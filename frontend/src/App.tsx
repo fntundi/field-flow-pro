@@ -12,6 +12,8 @@ import Dispatch from "@/pages/Dispatch";
 import Leads from "@/pages/Leads";
 import Customers from "@/pages/Customers";
 import Technicians from "@/pages/Technicians";
+import TechnicianDetail from "@/pages/TechnicianDetail";
+import AppointmentConfirmation from "@/pages/AppointmentConfirmation";
 import Schedule from "@/pages/Schedule";
 import MaintenanceSchedules from "@/pages/MaintenanceSchedules";
 import ServiceAgreements from "@/pages/ServiceAgreements";
