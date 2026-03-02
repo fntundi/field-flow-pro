@@ -2560,3 +2560,76 @@ export interface CustomerAccount {
   };
   status: string;
 }
+
+// ==================== JOB CHAT API ====================
+
+export type ChatChannel = 'internal' | 'customer';
+
+export interface ChatMessage {
+  id: string;
+  job_id: string;
+  channel: ChatChannel;
+  sender_id: string;
+  sender_name: string;
+  sender_role: string;
+  sender_avatar_url?: string;
+  message_type: 'text' | 'image' | 'system';
+  content: string;
+  image_url?: string;
+  is_read: boolean;
+  read_by: string[];
+  created_at: string;
+}
+
+export interface ChatThread {
+  id: string;
+  job_id: string;
+  channel: ChatChannel;
+  participants: { user_id: string; name: string; role: string; joined_at: string }[];
+  message_count: number;
+  last_message_at?: string;
+  last_message_preview?: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface UnreadCounts {
+  [jobId: string]: {
+    internal: number;
+    customer: number;
+  };
+}
+
+export const chatApi = {
+  // Get messages for a job's channel
+  getMessages: (jobId: string, channel: ChatChannel, limit: number = 50, before?: string) => {
+    const params = new URLSearchParams();
+    params.append('limit', limit.toString());
+    if (before) params.append('before', before);
+    return fetchApi<ChatMessage[]>(`/jobs/${jobId}/chat/${channel}/messages?${params.toString()}`);
+  },
+  
+  // Get threads for a job
+  getThreads: (jobId: string) =>
+    fetchApi<ChatThread[]>(`/jobs/${jobId}/chat/threads`),
+  
+  // Post a message (REST fallback)
+  postMessage: (jobId: string, channel: ChatChannel, content: string) =>
+    fetchApi<ChatMessage>(`/jobs/${jobId}/chat/${channel}/message`, {
+      method: 'POST',
+      body: JSON.stringify({ content }),
+    }),
+  
+  // Get unread counts for current user
+  getUnreadCounts: () =>
+    fetchApi<UnreadCounts>('/chat/unread-counts'),
+  
+  // Create a WebSocket connection to chat
+  createWebSocket: (jobId: string, channel: ChatChannel): WebSocket => {
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const token = localStorage.getItem('auth_token') || '';
+    // Use the same host as the API base URL but replace /api prefix
+    const wsBase = API_BASE_URL.replace('https://', '').replace('http://', '');
+    return new WebSocket(`${wsProtocol}//${wsBase}/ws/chat/${jobId}/${channel}?token=${token}`);
+  },
+};
