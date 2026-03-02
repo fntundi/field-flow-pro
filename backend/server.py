@@ -4417,7 +4417,7 @@ async def post_chat_message(job_id: str, channel: str, data: dict, user: dict = 
         "created_at": datetime.now(timezone.utc),
     }
     
-    await db.chat_messages.insert_one(message)
+    await db.chat_messages.insert_one(message.copy())  # Use copy to avoid _id mutation
     
     # Update thread
     await db.chat_threads.update_one(
@@ -4434,12 +4434,15 @@ async def post_chat_message(job_id: str, channel: str, data: dict, user: dict = 
     )
     
     # Broadcast via WebSocket
-    message["created_at"] = message["created_at"].isoformat()
+    broadcast_message = message.copy()
+    broadcast_message["created_at"] = broadcast_message["created_at"].isoformat()
     await chat_manager.broadcast_to_job(job_id, channel, {
         "type": "new_message",
-        "message": message,
+        "message": broadcast_message,
     })
     
+    # Return message with ISO timestamp
+    message["created_at"] = message["created_at"].isoformat()
     return message
 
 @api_router.get("/chat/unread-counts")
