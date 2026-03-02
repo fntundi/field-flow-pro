@@ -24,7 +24,6 @@ import Invoices from "@/pages/Invoices";
 import InventoryManagement from "@/pages/InventoryManagement";
 import Vendors from "@/pages/Vendors";
 import Analytics from "@/pages/Analytics";
-import PlaceholderPage from "@/pages/PlaceholderPage";
 import NotFound from "./pages/NotFound";
 import GanttChart from "@/pages/GanttChart";
 import CustomerPortal from "@/pages/CustomerPortal";
@@ -37,6 +36,8 @@ import Checklists from "@/pages/Checklists";
 import ReportsBuilder from "@/pages/ReportsBuilder";
 import SchedulingBoard from "@/pages/SchedulingBoard";
 import ProjectBilling from "@/pages/ProjectBilling";
+import Sites from "@/pages/Sites";
+import Projects from "@/pages/Projects";
 import { Loader2 } from "lucide-react";
 import { registerServiceWorker, setupInstallPrompt, offlineStorage } from "@/lib/pwa";
 
