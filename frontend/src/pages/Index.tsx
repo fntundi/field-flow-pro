@@ -654,7 +654,7 @@ const Dashboard = () => {
                   Select a job to dispatch to. Travel time will be tracked from your current location.
                 </p>
                 <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {displayJobs.length > 0 ? displayJobs.map((job) => (
+                  {availableJobsForDispatch.length > 0 ? availableJobsForDispatch.map((job) => (
                     <div
                       key={job.id}
                       className="p-3 bg-muted/50 rounded-lg flex items-center justify-between hover:bg-muted transition-colors"
