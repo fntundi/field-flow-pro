@@ -14,6 +14,7 @@ import { JobChat } from "@/components/JobChat";
 import {
   ArrowLeft,
   Phone,
+  PhoneCall,
   MapPin,
   Calendar,
   User,
@@ -22,6 +23,7 @@ import {
   Plus,
   Mail,
   MessageSquare,
+  Loader2,
 } from "lucide-react";
 import { jobsApi, tasksApi, boardConfigApi, techniciansApi, voipApi, Job, Task, BoardConfig, StatusColumn, Technician } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
