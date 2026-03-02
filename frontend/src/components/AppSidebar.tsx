@@ -23,6 +23,7 @@ import {
   Building2,
   FolderKanban,
   LogOut,
+  Upload,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -48,6 +49,7 @@ const navItems = [
   { to: "/invoices", icon: FileText, label: "Invoices" },
   { to: "/inventory", icon: Package, label: "Inventory" },
   { to: "/analytics", icon: BarChart3, label: "Analytics" },
+  { to: "/import", icon: Upload, label: "Import Data" },
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
 
