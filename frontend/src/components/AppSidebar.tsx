@@ -1,4 +1,4 @@
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
   Briefcase,
@@ -22,8 +22,12 @@ import {
   PhoneIncoming,
   Building2,
   FolderKanban,
+  LogOut,
 } from "lucide-react";
 import { useState, useEffect } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
