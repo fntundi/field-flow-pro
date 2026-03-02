@@ -395,6 +395,119 @@ async def update_user_role(user_id: str, data: dict, user: dict = Depends(requir
     
     return {"message": f"User role updated to {new_role}"}
 
+# ==================== GOOGLE OAUTH API ====================
+
+import httpx
+
+@api_router.post("/auth/google/session")
+async def google_session_exchange(data: dict, response: JSONResponse):
+    """Exchange Google OAuth session_id for user data and create local session"""
+    session_id = data.get("session_id")
+    if not session_id:
+        raise HTTPException(status_code=400, detail="session_id is required")
+    
+    # Call Emergent Auth to get session data
+    try:
+        async with httpx.AsyncClient() as client:
+            auth_response = await client.get(
+                "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
+                headers={"X-Session-ID": session_id},
+                timeout=10.0
+            )
+            
+            if auth_response.status_code != 200:
+                raise HTTPException(status_code=401, detail="Invalid session")
+            
+            google_data = auth_response.json()
+    except httpx.RequestError as e:
+        logger.error(f"Error calling Emergent Auth: {e}")
+        raise HTTPException(status_code=500, detail="Authentication service unavailable")
+    
+    # Extract user data from Google response
+    email = google_data.get("email", "").lower()
+    name = google_data.get("name", "")
+    picture = google_data.get("picture", "")
+    google_session_token = google_data.get("session_token", "")
+    
+    if not email:
+        raise HTTPException(status_code=400, detail="Email not provided by Google")
+    
+    # Check if user exists, if not create them
+    existing_user = await db.auth_users.find_one({"email": email}, {"_id": 0})
+    
+    if existing_user:
+        # Update existing user with Google data
+        await db.auth_users.update_one(
+            {"email": email},
+            {"$set": {
+                "google_id": google_data.get("id"),
+                "name": name or existing_user.get("name"),
+                "avatar_url": picture or existing_user.get("avatar_url"),
+                "auth_provider": "google",
+                "last_login": datetime.now(timezone.utc),
+                "updated_at": datetime.now(timezone.utc)
+            }}
+        )
+        user_id = existing_user["id"]
+        user_role = existing_user.get("role", "technician")
+    else:
+        # Create new user
+        user_id = str(uuid.uuid4())
+        new_user = {
+            "id": user_id,
+            "email": email,
+            "name": name,
+            "google_id": google_data.get("id"),
+            "avatar_url": picture,
+            "role": "technician",  # Default role for new Google users
+            "auth_provider": "google",
+            "is_active": True,
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
+            "last_login": datetime.now(timezone.utc)
+        }
+        await db.auth_users.insert_one(new_user)
+        user_role = "technician"
+    
+    # Store session token in database
+    session_expires = datetime.now(timezone.utc) + timedelta(days=7)
+    await db.user_sessions.update_one(
+        {"user_id": user_id},
+        {"$set": {
+            "user_id": user_id,
+            "session_token": google_session_token,
+            "expires_at": session_expires,
+            "created_at": datetime.now(timezone.utc)
+        }},
+        upsert=True
+    )
+    
+    # Create our own JWT token for the user
+    access_token = create_access_token({"sub": user_id, "email": email, "role": user_role})
+    
+    # Get fresh user data
+    user = await db.auth_users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+    
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": {
+            "id": user["id"],
+            "email": user["email"],
+            "name": user["name"],
+            "role": user.get("role", "technician"),
+            "avatar_url": user.get("avatar_url"),
+            "auth_provider": "google"
+        }
+    }
+
+@api_router.post("/auth/google/logout")
+async def google_logout(user: dict = Depends(require_auth)):
+    """Logout user by deleting session"""
+    # Delete session from database
+    await db.user_sessions.delete_one({"user_id": user["id"]})
+    return {"message": "Logged out successfully"}
+
 # ==================== DEFAULT DATA INITIALIZATION ====================
 
 async def ensure_default_board_config():
