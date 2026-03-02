@@ -261,6 +261,7 @@ export default function Settings() {
         {/* Integrations */}
         <TabsContent value="integrations" className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
+            {/* Google Maps Integration */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -305,6 +306,7 @@ export default function Settings() {
               </CardContent>
             </Card>
 
+            {/* AI Features - Enhanced */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -312,7 +314,7 @@ export default function Settings() {
                   AI Features
                 </CardTitle>
                 <CardDescription>
-                  Enable AI-powered scheduling and insights
+                  AI-powered scheduling, summaries, and insights
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -329,9 +331,245 @@ export default function Settings() {
                     onCheckedChange={(checked) => handleToggle("ai_features_enabled", checked)}
                   />
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  AI features are currently in beta and require additional configuration.
-                </p>
+                
+                {settings?.ai_features_enabled && (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="ai_provider">AI Provider</Label>
+                      <Select
+                        value={settings?.ai_provider || "gemini"}
+                        onValueChange={(value) => updateSettingsMutation.mutate({ ai_provider: value as "gemini" | "openai" | "claude" })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select provider" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="gemini">Google Gemini</SelectItem>
+                          <SelectItem value="openai">OpenAI</SelectItem>
+                          <SelectItem value="claude">Anthropic Claude</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="ai_model">Model</Label>
+                      <Input
+                        id="ai_model"
+                        value={settings?.ai_model || "gemini-2.0-flash"}
+                        onChange={(e) => updateSettingsMutation.mutate({ ai_model: e.target.value })}
+                        placeholder="e.g., gemini-2.0-flash"
+                      />
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label htmlFor="ai_failover_enabled">Enable Failover</Label>
+                        <p className="text-xs text-muted-foreground">
+                          Fall back to simple summaries if AI fails
+                        </p>
+                      </div>
+                      <Switch
+                        id="ai_failover_enabled"
+                        checked={settings?.ai_failover_enabled ?? true}
+                        onCheckedChange={(checked) => handleToggle("ai_failover_enabled", checked)}
+                      />
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* QuickBooks Integration */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Link2 className="w-5 h-5" />
+                  QuickBooks Integration
+                </CardTitle>
+                <CardDescription>
+                  Sync invoices, payments, and customers with QuickBooks
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label htmlFor="quickbooks_enabled">Enable QuickBooks</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Bi-directional sync with QuickBooks Online
+                    </p>
+                  </div>
+                  <Switch
+                    id="quickbooks_enabled"
+                    checked={settings?.quickbooks_enabled || false}
+                    onCheckedChange={(checked) => handleToggle("quickbooks_enabled", checked)}
+                  />
+                </div>
+                
+                {settings?.quickbooks_enabled && (
+                  <>
+                    <div className="flex items-center gap-2">
+                      {qbLoading ? (
+                        <Badge className="bg-slate-500/20 text-slate-400">
+                          <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                          Checking...
+                        </Badge>
+                      ) : quickbooksStatus?.connected ? (
+                        <Badge className="bg-emerald-500/20 text-emerald-400">
+                          <CheckCircle className="w-3 h-3 mr-1" />
+                          Connected
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-yellow-500/20 text-yellow-400">
+                          <XCircle className="w-3 h-3 mr-1" />
+                          Not Connected
+                        </Badge>
+                      )}
+                    </div>
+                    
+                    {!quickbooksStatus?.connected ? (
+                      <div className="space-y-2">
+                        <p className="text-xs text-muted-foreground">
+                          QuickBooks requires OAuth credentials. Set <code className="bg-muted px-1 rounded">QUICKBOOKS_CLIENT_ID</code> and <code className="bg-muted px-1 rounded">QUICKBOOKS_CLIENT_SECRET</code> in backend/.env
+                        </p>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          disabled={!quickbooksStatus?.configured}
+                          onClick={async () => {
+                            try {
+                              const { auth_url } = await quickbooksApi.getAuthUrl();
+                              window.open(auth_url, "_blank");
+                            } catch {
+                              toast.error("Failed to get auth URL");
+                            }
+                          }}
+                        >
+                          <Link2 className="w-4 h-4 mr-2" />
+                          Connect QuickBooks
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {/* Sync Options */}
+                        <div className="flex items-center justify-between">
+                          <Label className="text-sm">Sync Invoices</Label>
+                          <Switch
+                            checked={settings?.quickbooks_sync_invoices ?? true}
+                            onCheckedChange={(checked) => handleToggle("quickbooks_sync_invoices", checked)}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <Label className="text-sm">Sync Payments</Label>
+                          <Switch
+                            checked={settings?.quickbooks_sync_payments ?? true}
+                            onCheckedChange={(checked) => handleToggle("quickbooks_sync_payments", checked)}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <Label className="text-sm">Sync Customers</Label>
+                          <Switch
+                            checked={settings?.quickbooks_sync_customers ?? true}
+                            onCheckedChange={(checked) => handleToggle("quickbooks_sync_customers", checked)}
+                          />
+                        </div>
+                        
+                        <div className="flex gap-2 pt-2">
+                          <Button
+                            size="sm"
+                            onClick={() => syncQuickbooksMutation.mutate("full")}
+                            disabled={syncQuickbooksMutation.isPending}
+                          >
+                            {syncQuickbooksMutation.isPending ? (
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            ) : (
+                              <RefreshCw className="w-4 h-4 mr-2" />
+                            )}
+                            Sync Now
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => disconnectQuickbooksMutation.mutate()}
+                            disabled={disconnectQuickbooksMutation.isPending}
+                          >
+                            Disconnect
+                          </Button>
+                        </div>
+                        
+                        {quickbooksStatus?.last_sync && (
+                          <p className="text-xs text-muted-foreground">
+                            Last sync: {new Date(quickbooksStatus.last_sync).toLocaleString()}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Push Notifications */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Bell className="w-5 h-5" />
+                  Push Notifications
+                </CardTitle>
+                <CardDescription>
+                  Configure mobile and desktop push notifications
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label htmlFor="push_notifications_enabled">Enable Push Notifications</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Send notifications to mobile devices and browsers
+                    </p>
+                  </div>
+                  <Switch
+                    id="push_notifications_enabled"
+                    checked={settings?.push_notifications_enabled ?? true}
+                    onCheckedChange={(checked) => handleToggle("push_notifications_enabled", checked)}
+                  />
+                </div>
+                
+                {settings?.push_notifications_enabled && (
+                  <>
+                    <div className="space-y-2 border-t pt-4">
+                      <p className="text-sm font-medium">Notification Triggers</p>
+                      
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm font-normal">New Chat Messages</Label>
+                        <Switch
+                          checked={settings?.notify_on_chat_message ?? true}
+                          onCheckedChange={(checked) => handleToggle("notify_on_chat_message", checked)}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm font-normal">Job Assignments</Label>
+                        <Switch
+                          checked={settings?.notify_on_job_assignment ?? true}
+                          onCheckedChange={(checked) => handleToggle("notify_on_job_assignment", checked)}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm font-normal">Schedule Changes</Label>
+                        <Switch
+                          checked={settings?.notify_on_schedule_change ?? true}
+                          onCheckedChange={(checked) => handleToggle("notify_on_schedule_change", checked)}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm font-normal">Payment Received</Label>
+                        <Switch
+                          checked={settings?.notify_on_payment_received ?? true}
+                          onCheckedChange={(checked) => handleToggle("notify_on_payment_received", checked)}
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
           </div>
