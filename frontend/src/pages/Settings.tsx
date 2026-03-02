@@ -581,6 +581,119 @@ export default function Settings() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Your Device - Push Subscription */}
+            <Card data-testid="device-push-settings">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Smartphone className="w-5 h-5" />
+                  Your Device
+                </CardTitle>
+                <CardDescription>
+                  Manage notifications for this browser/device
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Online Status */}
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'}`} />
+                  <span className="text-sm text-muted-foreground">
+                    {isOnline ? 'Online' : 'Offline - some features may be unavailable'}
+                  </span>
+                </div>
+
+                {/* PWA Install Status */}
+                {!pwaInstall.isInstalled && (
+                  <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                    <div>
+                      <p className="text-sm font-medium">Install as App</p>
+                      <p className="text-xs text-muted-foreground">
+                        Get quick access and offline support
+                      </p>
+                    </div>
+                    {pwaInstall.canInstall ? (
+                      <Button 
+                        size="sm" 
+                        onClick={pwaInstall.install}
+                        data-testid="install-pwa-button"
+                      >
+                        Install
+                      </Button>
+                    ) : (
+                      <Badge variant="outline">Not Available</Badge>
+                    )}
+                  </div>
+                )}
+
+                {pwaInstall.isInstalled && (
+                  <div className="flex items-center gap-2 p-3 bg-green-500/10 rounded-lg">
+                    <CheckCircle className="w-4 h-4 text-green-500" />
+                    <span className="text-sm text-green-600 dark:text-green-400">
+                      App installed on this device
+                    </span>
+                  </div>
+                )}
+
+                {/* Push Notification Subscription */}
+                <div className="border-t pt-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium">Push Notifications</p>
+                      <p className="text-xs text-muted-foreground">
+                        {!pushNotifications.supported 
+                          ? 'Not supported on this browser'
+                          : pushNotifications.permission === 'denied'
+                          ? 'Blocked - enable in browser settings'
+                          : pushNotifications.subscribed
+                          ? 'Receiving notifications on this device'
+                          : 'Enable to receive real-time updates'}
+                      </p>
+                    </div>
+                    {pushNotifications.supported && pushNotifications.permission !== 'denied' && (
+                      <Button
+                        size="sm"
+                        variant={pushNotifications.subscribed ? "outline" : "default"}
+                        onClick={() => {
+                          if (pushNotifications.subscribed) {
+                            pushNotifications.unsubscribe().then((success) => {
+                              if (success) toast.success("Notifications disabled for this device");
+                              else toast.error("Failed to disable notifications");
+                            });
+                          } else {
+                            pushNotifications.subscribe().then((success) => {
+                              if (success) toast.success("Notifications enabled for this device");
+                              else toast.error("Failed to enable notifications");
+                            });
+                          }
+                        }}
+                        disabled={pushNotifications.loading}
+                        data-testid="push-toggle-button"
+                      >
+                        {pushNotifications.loading ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : pushNotifications.subscribed ? (
+                          <>
+                            <BellOff className="w-4 h-4 mr-1" />
+                            Disable
+                          </>
+                        ) : (
+                          <>
+                            <BellRing className="w-4 h-4 mr-1" />
+                            Enable
+                          </>
+                        )}
+                      </Button>
+                    )}
+                  </div>
+                  
+                  {pushNotifications.permission === 'denied' && (
+                    <div className="mt-2 p-2 bg-yellow-500/10 rounded text-xs text-yellow-600 dark:text-yellow-400">
+                      Notifications are blocked. To enable, click the lock icon in your browser's address bar and allow notifications.
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </TabsContent>
 
