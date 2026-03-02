@@ -1,5 +1,37 @@
 # BreezeFlow Changelog
 
+## [2025-03-02] - Sites & Projects Pages Complete
+
+### Added
+- **Sites Management Page** (`/sites`)
+  - Full CRUD for service locations
+  - Stats cards: Total Sites, Residential, Commercial, With Pets
+  - Site cards with customer name, address, job count, type badge
+  - Site detail sheet with tabs: Info, Jobs history, Equipment
+  - Migration endpoint: Import sites from existing job addresses
+  - Access info: gate codes, parking notes, building hours, pet warnings
+- **Projects Management Page** (`/projects`)
+  - Project list with stats: Total, In Progress, Scheduled, Completed
+  - Project cards showing progress bars, timeline status, phase count, budget
+  - Status actions: Planning → Scheduled → In Progress → On Hold → Completed
+  - Create project dialog linked to install jobs
+  - Gantt button navigates to `/projects/{id}` for detailed view
+- **Customers API** - New `/api/customers` endpoint with search support
+- **Sites API** - Full CRUD + `/api/sites/migrate-from-jobs`
+
+### Files Created
+- `/app/frontend/src/pages/Sites.tsx`
+- `/app/frontend/src/pages/Projects.tsx`
+- `/app/backend/tests/test_sites_projects.py`
+
+### Files Modified
+- `/app/backend/server.py` - Added customers and sites API endpoints (~330 lines)
+- `/app/backend/models.py` - Added Site, SiteCreate, SiteUpdate, SiteContact models
+- `/app/frontend/src/lib/api.ts` - Added sitesApi and customersApi
+- `/app/frontend/src/App.tsx` - Replaced placeholder routes with new pages
+
+---
+
 ## [2025-03-02] - PWA Implementation Complete
 
 ### Added
