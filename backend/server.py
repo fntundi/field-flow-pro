@@ -8158,6 +8158,408 @@ async def ensure_default_milestone_templates():
     await db.milestone_templates.insert_many(default_templates)
     logger.info(f"Created {len(default_templates)} default milestone templates")
 
+# ==================== VOIP INTEGRATION API (Phone.com) ====================
+
+@api_router.get("/voip/status")
+async def get_voip_status():
+    """Get VoIP integration status"""
+    return {
+        "enabled": phone_com_service.is_configured,
+        "provider": "phone.com",
+        "api_key_configured": bool(phone_com_service.api_key),
+        "account_id_configured": bool(phone_com_service.account_id),
+    }
+
+@api_router.post("/voip/configure")
+async def configure_voip(data: dict):
+    """Configure VoIP integration (admin only) - stores credentials"""
+    api_key = data.get("api_key")
+    account_id = data.get("account_id")
+    webhook_secret = data.get("webhook_secret")
+    
+    if not api_key or not account_id:
+        raise HTTPException(status_code=400, detail="API key and account ID required")
+    
+    # Store in system settings
+    await db.system_settings.update_one(
+        {},
+        {"$set": {
+            "voip_enabled": True,
+            "voip_provider": "phone.com",
+            "voip_account_id": account_id,
+            "voip_webhook_secret": webhook_secret,
+            "updated_at": datetime.utcnow()
+        }},
+        upsert=True
+    )
+    
+    # Note: API key should be stored in environment variable, not database
+    # This endpoint just validates and enables the integration
+    
+    return {"message": "VoIP configured successfully. Set PHONE_COM_API_KEY environment variable."}
+
+@api_router.get("/voip/phone-numbers")
+async def get_voip_phone_numbers():
+    """Get available phone numbers from Phone.com"""
+    if not phone_com_service.is_configured:
+        # Return demo numbers if not configured
+        return {
+            "numbers": [
+                {"id": "demo-1", "number": "+1 (555) 123-4567", "name": "Main Line", "type": "main"},
+                {"id": "demo-2", "number": "+1 (555) 987-6543", "name": "Support", "type": "support"},
+            ],
+            "demo_mode": True
+        }
+    
+    try:
+        numbers = await phone_com_service.get_phone_numbers()
+        return {"numbers": numbers, "demo_mode": False}
+    except Exception as e:
+        logger.error(f"Error fetching phone numbers: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/voip/calls/initiate")
+async def initiate_voip_call(request: CallInitiateRequest):
+    """Initiate an outbound click-to-call"""
+    # Auto-lookup customer if phone number matches
+    customer = None
+    if not request.customer_id:
+        customer = await db.customers.find_one({
+            "$or": [
+                {"phone": {"$regex": request.to_number[-10:]}},
+                {"mobile": {"$regex": request.to_number[-10:]}}
+            ]
+        })
+    else:
+        customer = await db.customers.find_one({"id": request.customer_id})
+    
+    # Create call log record
+    call_log = VoIPCallLog(
+        caller_number=request.from_number or "+15551234567",  # Default demo number
+        called_number=request.to_number,
+        direction="outbound",
+        status="initiated",
+        customer_id=customer["id"] if customer else request.customer_id,
+        customer_name=customer["name"] if customer else None,
+        job_id=request.job_id,
+        notes=request.notes,
+    )
+    
+    if phone_com_service.is_configured:
+        try:
+            response = await phone_com_service.make_call(
+                call_log.caller_number,
+                call_log.called_number
+            )
+            call_log.phone_com_call_id = response.get("id")
+            call_log.status = "ringing"
+        except Exception as e:
+            logger.error(f"Phone.com call error: {e}")
+            call_log.status = "failed"
+            call_log.notes = f"Error: {str(e)}"
+    else:
+        # Demo mode - simulate call
+        call_log.status = "completed"
+        call_log.duration_seconds = 45
+        call_log.notes = "[DEMO MODE] Simulated call"
+    
+    # Store in database
+    await db.voip_call_logs.insert_one(call_log.dict())
+    
+    return {
+        "success": call_log.status != "failed",
+        "call_id": call_log.id,
+        "status": call_log.status,
+        "demo_mode": not phone_com_service.is_configured
+    }
+
+@api_router.get("/voip/calls")
+async def get_voip_calls(
+    limit: int = 50, 
+    offset: int = 0,
+    customer_id: Optional[str] = None,
+    job_id: Optional[str] = None,
+    direction: Optional[str] = None
+):
+    """Get call logs"""
+    query = {}
+    if customer_id:
+        query["customer_id"] = customer_id
+    if job_id:
+        query["job_id"] = job_id
+    if direction:
+        query["direction"] = direction
+    
+    calls = await db.voip_call_logs.find(query)\
+        .sort("created_at", -1)\
+        .skip(offset)\
+        .limit(limit)\
+        .to_list(limit)
+    
+    total = await db.voip_call_logs.count_documents(query)
+    
+    for call in calls:
+        call.pop("_id", None)
+    
+    return {"calls": calls, "total": total}
+
+@api_router.get("/voip/calls/{call_id}")
+async def get_voip_call(call_id: str):
+    """Get a specific call log"""
+    call = await db.voip_call_logs.find_one({"id": call_id})
+    if not call:
+        raise HTTPException(status_code=404, detail="Call not found")
+    call.pop("_id", None)
+    return call
+
+@api_router.put("/voip/calls/{call_id}/notes")
+async def update_call_notes(call_id: str, data: dict):
+    """Update notes on a call log"""
+    notes = data.get("notes")
+    tags = data.get("tags", [])
+    
+    result = await db.voip_call_logs.update_one(
+        {"id": call_id},
+        {"$set": {
+            "notes": notes,
+            "tags": tags,
+            "updated_at": datetime.utcnow()
+        }}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Call not found")
+    
+    return {"message": "Notes updated"}
+
+@api_router.post("/voip/sms/send")
+async def send_voip_sms(request: SMSSendRequest):
+    """Send an SMS message"""
+    # Auto-lookup customer
+    customer = None
+    if not request.customer_id:
+        customer = await db.customers.find_one({
+            "$or": [
+                {"phone": {"$regex": request.to_number[-10:]}},
+                {"mobile": {"$regex": request.to_number[-10:]}}
+            ]
+        })
+    else:
+        customer = await db.customers.find_one({"id": request.customer_id})
+    
+    sms = VoIPSMS(
+        from_number=request.from_number or "+15551234567",
+        to_number=request.to_number,
+        message=request.message,
+        direction="outbound",
+        customer_id=customer["id"] if customer else request.customer_id,
+        customer_name=customer["name"] if customer else None,
+        job_id=request.job_id,
+    )
+    
+    if phone_com_service.is_configured:
+        try:
+            response = await phone_com_service.send_sms(
+                sms.from_number,
+                sms.to_number,
+                sms.message
+            )
+            sms.phone_com_message_id = response.get("id")
+            sms.status = "sent"
+        except Exception as e:
+            logger.error(f"Phone.com SMS error: {e}")
+            sms.status = "failed"
+    else:
+        # Demo mode
+        sms.status = "sent"
+    
+    await db.voip_sms.insert_one(sms.dict())
+    
+    return {
+        "success": sms.status != "failed",
+        "message_id": sms.id,
+        "status": sms.status,
+        "demo_mode": not phone_com_service.is_configured
+    }
+
+@api_router.get("/voip/sms")
+async def get_voip_sms(
+    limit: int = 50,
+    offset: int = 0,
+    customer_id: Optional[str] = None
+):
+    """Get SMS messages"""
+    query = {}
+    if customer_id:
+        query["customer_id"] = customer_id
+    
+    messages = await db.voip_sms.find(query)\
+        .sort("created_at", -1)\
+        .skip(offset)\
+        .limit(limit)\
+        .to_list(limit)
+    
+    for msg in messages:
+        msg.pop("_id", None)
+    
+    return {"messages": messages}
+
+@api_router.get("/voip/analytics")
+async def get_voip_analytics(days: int = 30):
+    """Get call analytics for the specified period"""
+    start_date = datetime.utcnow() - timedelta(days=days)
+    
+    # Aggregation pipeline for analytics
+    pipeline = [
+        {"$match": {"created_at": {"$gte": start_date}}},
+        {"$group": {
+            "_id": None,
+            "total_calls": {"$sum": 1},
+            "total_duration": {"$sum": "$duration_seconds"},
+            "inbound_calls": {"$sum": {"$cond": [{"$eq": ["$direction", "inbound"]}, 1, 0]}},
+            "outbound_calls": {"$sum": {"$cond": [{"$eq": ["$direction", "outbound"]}, 1, 0]}},
+            "completed_calls": {"$sum": {"$cond": [{"$eq": ["$status", "completed"]}, 1, 0]}},
+            "missed_calls": {"$sum": {"$cond": [{"$eq": ["$status", "missed"]}, 1, 0]}},
+        }}
+    ]
+    
+    result = await db.voip_call_logs.aggregate(pipeline).to_list(1)
+    
+    if not result:
+        return CallAnalytics().dict()
+    
+    stats = result[0]
+    avg_duration = stats["total_duration"] / stats["total_calls"] if stats["total_calls"] > 0 else 0
+    
+    # Get calls by status
+    status_pipeline = [
+        {"$match": {"created_at": {"$gte": start_date}}},
+        {"$group": {"_id": "$status", "count": {"$sum": 1}}}
+    ]
+    status_result = await db.voip_call_logs.aggregate(status_pipeline).to_list(10)
+    calls_by_status = {r["_id"]: r["count"] for r in status_result}
+    
+    # Get calls by hour
+    hour_pipeline = [
+        {"$match": {"created_at": {"$gte": start_date}}},
+        {"$group": {
+            "_id": {"$hour": "$created_at"},
+            "count": {"$sum": 1}
+        }},
+        {"$sort": {"_id": 1}}
+    ]
+    hour_result = await db.voip_call_logs.aggregate(hour_pipeline).to_list(24)
+    calls_by_hour = {str(r["_id"]): r["count"] for r in hour_result}
+    
+    return {
+        "total_calls": stats["total_calls"],
+        "inbound_calls": stats["inbound_calls"],
+        "outbound_calls": stats["outbound_calls"],
+        "completed_calls": stats["completed_calls"],
+        "missed_calls": stats["missed_calls"],
+        "average_duration_seconds": round(avg_duration, 1),
+        "total_duration_seconds": stats["total_duration"],
+        "calls_by_status": calls_by_status,
+        "calls_by_hour": calls_by_hour,
+    }
+
+@api_router.post("/voip/webhook/call")
+async def voip_call_webhook(request: Request):
+    """Webhook endpoint for Phone.com call events"""
+    try:
+        body = await request.body()
+        signature = request.headers.get("X-Phone-Signature", "")
+        
+        if not phone_com_service.verify_webhook_signature(body, signature):
+            logger.warning("Invalid VoIP webhook signature")
+            raise HTTPException(status_code=401, detail="Invalid signature")
+        
+        payload = json.loads(body)
+        event_type = payload.get("event")
+        call_data = payload.get("data", {})
+        
+        # Find and update call log
+        call_id = call_data.get("id")
+        if call_id:
+            update_data = {
+                "status": call_data.get("status", "completed"),
+                "duration_seconds": call_data.get("duration", 0),
+                "recording_url": call_data.get("recording_url"),
+                "updated_at": datetime.utcnow()
+            }
+            
+            await db.voip_call_logs.update_one(
+                {"phone_com_call_id": call_id},
+                {"$set": update_data}
+            )
+        
+        # Handle inbound calls - create new log
+        if event_type == "call.incoming":
+            caller = call_data.get("from")
+            called = call_data.get("to")
+            
+            # Try to match to customer
+            customer = await db.customers.find_one({
+                "$or": [
+                    {"phone": {"$regex": caller[-10:] if caller else ""}},
+                    {"mobile": {"$regex": caller[-10:] if caller else ""}}
+                ]
+            })
+            
+            inbound_log = VoIPCallLog(
+                phone_com_call_id=call_id,
+                caller_number=caller,
+                called_number=called,
+                direction="inbound",
+                status="ringing",
+                customer_id=customer["id"] if customer else None,
+                customer_name=customer["name"] if customer else None,
+            )
+            await db.voip_call_logs.insert_one(inbound_log.dict())
+        
+        return {"status": "received"}
+    except Exception as e:
+        logger.error(f"VoIP webhook error: {e}")
+        return {"status": "error"}
+
+@api_router.post("/voip/webhook/sms")
+async def voip_sms_webhook(request: Request):
+    """Webhook endpoint for Phone.com SMS events"""
+    try:
+        body = await request.body()
+        signature = request.headers.get("X-Phone-Signature", "")
+        
+        if not phone_com_service.verify_webhook_signature(body, signature):
+            raise HTTPException(status_code=401, detail="Invalid signature")
+        
+        payload = json.loads(body)
+        sms_data = payload.get("data", {})
+        
+        # Store inbound SMS
+        customer = await db.customers.find_one({
+            "$or": [
+                {"phone": {"$regex": sms_data.get("from", "")[-10:]}},
+                {"mobile": {"$regex": sms_data.get("from", "")[-10:]}}
+            ]
+        })
+        
+        inbound_sms = VoIPSMS(
+            phone_com_message_id=sms_data.get("id"),
+            from_number=sms_data.get("from"),
+            to_number=sms_data.get("to"),
+            message=sms_data.get("text", ""),
+            direction="inbound",
+            status="received",
+            customer_id=customer["id"] if customer else None,
+            customer_name=customer["name"] if customer else None,
+        )
+        await db.voip_sms.insert_one(inbound_sms.dict())
+        
+        return {"status": "received"}
+    except Exception as e:
+        logger.error(f"SMS webhook error: {e}")
+        return {"status": "error"}
+
 # ==================== PUSH NOTIFICATIONS API ====================
 
 # Generate VAPID keys if not present
