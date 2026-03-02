@@ -1,0 +1,88 @@
+{
+  "summary": "RFC-002 Phase 1 & 2 backend API testing completed. 24/25 tests passed, 1 skipped due to backend bug. All core features working: System Settings, RBAC Roles, Leads CRUD + workflow, PCBs CRUD + workflow, Proposals CRUD + options, Job Types, Vendors.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/pcbs/{id}/convert",
+        "issue": "Returns 500 - Job model requires 'site_address' field but convert_pcb_to_job() doesn't provide it",
+        "priority": "HIGH",
+        "file": "/app/backend/server.py",
+        "line": "3836-3844",
+        "fix": "Add site_address field when creating Job in convert_pcb_to_job(). Suggest: site_address=pcb.get('address', 'TBD')"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_rfc002_phase1_2.py",
+    "/app/test_reports/pytest/rfc002_results.xml"
+  ],
+  "action_items": [
+    "FIX: Add site_address field in convert_pcb_to_job() function at server.py line 3836-3844"
+  ],
+  "critical_code_review_comments": [
+    "convert_pcb_to_job() missing required site_address field when creating Job model - causes 500 error"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_rfc002_phase1_2.py"
+  ],
+  "success_rate": {
+    "backend": "96% (24/25 tests passed, 1 skipped due to bug)"
+  },
+  "test_credentials": null,
+  "seed_data_creation": "Test data created and cleaned up during tests (TEST_ prefixed leads, PCBs, proposals, vendors)",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "RFC-002 Phase 1 & 2 APIs tested. All endpoints working except POST /api/pcbs/{id}/convert which has a bug. System Settings returns google_maps_enabled=false as expected. 8 system roles exist: technician, lead_tech, dispatcher, manager, admin, accountant, sales, owner. PCB reason_category must be one of: follow_up, upsell, warranty, complaint, question, other. ProposalLineItem requires 'name' field.",
+  "rca_of_the_issue": {
+    "endpoint": "POST /api/pcbs/{id}/convert",
+    "root_cause": "Job model in models.py requires site_address as a mandatory field (line 1248), but convert_pcb_to_job() in server.py (line 3836-3844) creates Job without providing site_address",
+    "reproduction_steps": [
+      "1. Create a PCB via POST /api/pcbs",
+      "2. Call POST /api/pcbs/{id}/convert",
+      "3. Observe 500 Internal Server Error"
+    ],
+    "mitigation": "Add site_address field to Job creation in convert_pcb_to_job(). Example fix: site_address=pcb.get('address', 'Address TBD')"
+  },
+  "tested_endpoints": {
+    "system_settings": {
+      "GET /api/system/settings": "PASS - returns google_maps_enabled=false, google_maps_api_key_set=false",
+      "PUT /api/system/settings": "PASS - can update tax_rate, labor_rate"
+    },
+    "roles": {
+      "GET /api/roles": "PASS - returns 8 predefined system roles"
+    },
+    "leads": {
+      "GET /api/leads": "PASS - returns leads list with filtering",
+      "POST /api/leads": "PASS - creates new lead with status 'new'",
+      "PUT /api/leads/{id}": "PASS - updates lead status through workflow (new->contacted->qualified->quoted->won/lost)",
+      "POST /api/leads/{id}/convert": "PASS - converts lead to customer",
+      "GET /api/leads/metrics": "PASS - returns total, by_status, by_source, lead_to_close_ratio"
+    },
+    "pcbs": {
+      "GET /api/pcbs": "PASS - returns PCB list",
+      "POST /api/pcbs": "PASS - creates new PCB with reason and follow-up date",
+      "PUT /api/pcbs/{id}": "PASS - updates PCB status (created->assigned->follow_up->converted)",
+      "POST /api/pcbs/{id}/convert": "FAIL - 500 error, missing site_address in Job creation",
+      "GET /api/pcbs/metrics": "PASS - returns total, open, by_status, conversion_rate, overdue_count"
+    },
+    "proposals": {
+      "GET /api/proposals": "PASS - returns proposals list",
+      "POST /api/proposals": "PASS - creates new proposal",
+      "POST /api/proposals/{id}/options": "PASS - adds Good/Better/Best options (requires 'name' in line_items)",
+      "GET /api/proposals/metrics": "PASS - returns total, by_status, open_quotes, win_rate"
+    },
+    "job_types": {
+      "GET /api/job-types": "PASS - returns 4 default job type templates with checklists"
+    },
+    "vendors": {
+      "GET /api/vendors": "PASS - returns vendors list",
+      "POST /api/vendors": "PASS - creates new vendor"
+    }
+  }
+}
