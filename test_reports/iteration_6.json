@@ -1,0 +1,94 @@
+{
+  "summary": "Tested Install Project Billing (milestone templates) and Reschedule Requests features. All 16 backend tests pass. Frontend verified: Project Billing page loads with projects list, billing milestones display, Manage Templates dialog shows all 4 default templates. Customer Portal shows login/register/magic link auth options.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_milestone_reschedule.py",
+    "/app/test_reports/pytest/milestone_reschedule_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_milestone_reschedule.py"
+  ],
+  "success_rate": {
+    "backend": "100% (16/16 tests passed)",
+    "frontend": "100% (all features verified)"
+  },
+  "test_credentials": {
+    "demo_admin": "Click 'Admin' button on login page",
+    "api_base_url": "https://hvac-dispatch-hub.preview.emergentagent.com"
+  },
+  "seed_data_creation": "None - used existing test data and auto-seeded milestone templates",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Install Project Billing and Reschedule Requests features fully tested. 4 default milestone templates are auto-seeded on startup. Customer Portal reschedule requires logged-in customer with scheduled jobs.",
+  "tested_features": {
+    "milestone_templates_api": {
+      "get_all_templates": "PASS - Returns 4 default templates",
+      "default_templates": "PASS - 30/40/30, 50/50, 20/30/30/20, Full Payment templates exist",
+      "percentages_sum_100": "PASS - All templates sum to 100%",
+      "get_single_template": "PASS - Returns specific template by ID",
+      "invalid_template_404": "PASS - Returns 404 for invalid ID",
+      "create_template": "PASS - Creates new template with valid data",
+      "invalid_percentage_400": "PASS - Rejects templates not summing to 100%"
+    },
+    "reschedule_requests_api": {
+      "get_all_requests": "PASS - Returns list of reschedule requests",
+      "create_request": "PASS - Creates new request with pending status",
+      "invalid_job_404": "PASS - Returns 404 for invalid job_id",
+      "missing_job_id_400": "PASS - Returns 400 when job_id missing",
+      "filter_by_status": "PASS - Filters requests by status parameter"
+    },
+    "project_billing_api": {
+      "get_projects": "PASS - Returns project list",
+      "apply_template": "PASS - Applies billing template to project"
+    },
+    "support_requests_api": {
+      "create_request": "PASS - Creates support request (or 404 if customer not found)"
+    },
+    "project_billing_page": {
+      "page_load": "PASS - Title 'Install Project Billing' with RFC-002 Section 4.5.3 reference",
+      "projects_list": "PASS - Shows 8 install projects",
+      "project_selection": "PASS - Clicking project shows billing details panel",
+      "billing_milestones": "PASS - Shows configured milestones with status badges",
+      "manage_templates_btn": "PASS - Button visible in header",
+      "manage_templates_dialog": "PASS - Shows all 4 default templates with milestone breakdowns",
+      "new_template_btn": "PASS - New Template button available in dialog"
+    },
+    "sidebar_navigation": {
+      "project_billing_link": "PASS - Project Billing link visible in sidebar"
+    },
+    "customer_portal": {
+      "login_page": "PASS - Shows Login/Register/Magic Link tabs",
+      "password_auth": "PASS - Email and password fields available",
+      "magic_link_auth": "PASS - Magic Link tab available",
+      "registration": "PASS - Register tab available"
+    }
+  },
+  "default_milestone_templates": [
+    {
+      "name": "Standard Install (30/40/30)",
+      "milestones": ["Deposit: 30%", "Rough-In Complete: 40%", "Final Payment: 30%"]
+    },
+    {
+      "name": "Equipment Only (50/50)",
+      "milestones": ["Deposit: 50%", "Balance: 50%"]
+    },
+    {
+      "name": "Large Project (20/30/30/20)",
+      "milestones": ["Deposit: 20%", "Materials Ordered: 30%", "Rough-In Complete: 30%", "Final Payment: 20%"]
+    },
+    {
+      "name": "Full Payment on Completion",
+      "milestones": ["Full Payment: 100%"]
+    }
+  ]
+}
