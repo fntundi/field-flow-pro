@@ -20,7 +20,6 @@ import Schedule from "@/pages/Schedule";
 import MaintenanceSchedules from "@/pages/MaintenanceSchedules";
 import ServiceAgreements from "@/pages/ServiceAgreements";
 import Invoices from "@/pages/Invoices";
-import Inventory from "@/pages/Inventory";
 import InventoryManagement from "@/pages/InventoryManagement";
 import Vendors from "@/pages/Vendors";
 import Analytics from "@/pages/Analytics";
@@ -118,8 +117,7 @@ function AppRoutes() {
       <Route path="/agreements" element={<ProtectedRoute><AppLayout><ServiceAgreements /></AppLayout></ProtectedRoute>} />
       <Route path="/invoices" element={<ProtectedRoute><AppLayout><Invoices /></AppLayout></ProtectedRoute>} />
       <Route path="/vendors" element={<ProtectedRoute><AppLayout><Vendors /></AppLayout></ProtectedRoute>} />
-      <Route path="/inventory" element={<ProtectedRoute><AppLayout><Inventory /></AppLayout></ProtectedRoute>} />
-      <Route path="/inventory/manage" element={<ProtectedRoute><AppLayout><InventoryManagement /></AppLayout></ProtectedRoute>} />
+      <Route path="/inventory" element={<ProtectedRoute><AppLayout><InventoryManagement /></AppLayout></ProtectedRoute>} />
       <Route path="/analytics" element={<ProtectedRoute><AppLayout><Analytics /></AppLayout></ProtectedRoute>} />
       <Route path="/reports" element={<ProtectedRoute><AppLayout><ReportsBuilder /></AppLayout></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><AppLayout><Settings /></AppLayout></ProtectedRoute>} />
