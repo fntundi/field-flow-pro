@@ -108,6 +108,7 @@ function AppRoutes() {
       <Route path="/technicians" element={<ProtectedRoute><AppLayout><Technicians /></AppLayout></ProtectedRoute>} />
       <Route path="/technicians/:id" element={<ProtectedRoute><AppLayout><TechnicianDetail /></AppLayout></ProtectedRoute>} />
       <Route path="/schedule" element={<ProtectedRoute><AppLayout><Schedule /></AppLayout></ProtectedRoute>} />
+      <Route path="/scheduling-board" element={<ProtectedRoute><AppLayout><SchedulingBoard /></AppLayout></ProtectedRoute>} />
       <Route path="/maintenance" element={<ProtectedRoute><AppLayout><MaintenanceSchedules /></AppLayout></ProtectedRoute>} />
       <Route path="/maintenance-agreements" element={<ProtectedRoute><AppLayout><MaintenanceAgreements /></AppLayout></ProtectedRoute>} />
       <Route path="/checklists" element={<ProtectedRoute><AppLayout><Checklists /></AppLayout></ProtectedRoute>} />
