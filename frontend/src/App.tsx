@@ -99,6 +99,7 @@ function AppRoutes() {
       <Route path="/jobs/:id" element={<ProtectedRoute><AppLayout><JobDetail /></AppLayout></ProtectedRoute>} />
       <Route path="/projects/:projectId" element={<ProtectedRoute><AppLayout><GanttChart /></AppLayout></ProtectedRoute>} />
       <Route path="/projects" element={<ProtectedRoute><AppLayout><PlaceholderPage title="Projects" subtitle="Multi-day install projects and phases" /></AppLayout></ProtectedRoute>} />
+      <Route path="/project-billing" element={<ProtectedRoute><AppLayout><ProjectBilling /></AppLayout></ProtectedRoute>} />
       <Route path="/sales" element={<ProtectedRoute><AppLayout><Proposals /></AppLayout></ProtectedRoute>} />
       <Route path="/proposals" element={<ProtectedRoute><AppLayout><Proposals /></AppLayout></ProtectedRoute>} />
       <Route path="/estimates" element={<ProtectedRoute><AppLayout><Estimates /></AppLayout></ProtectedRoute>} />
