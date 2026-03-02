@@ -86,6 +86,9 @@ const AppLayout = ({ children }: AppLayoutProps) => {
         <Breadcrumbs />
         {children}
       </main>
+
+      {/* PWA Install Banner */}
+      <PWAInstallBanner />
     </div>
   );
 };
