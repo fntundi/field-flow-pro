@@ -129,6 +129,120 @@ class TechnicianPublicProfile(BaseModel):
     years_experience: int
     bio: Optional[str] = None
 
+# ==================== TIME TRACKING ====================
+
+class GeoLocation(BaseModel):
+    latitude: float
+    longitude: float
+    address: Optional[str] = None
+    accuracy: Optional[float] = None  # GPS accuracy in meters
+
+class TimeEntry(BaseModel):
+    """Individual time entry for a technician"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    technician_id: str
+    job_id: Optional[str] = None
+    entry_type: Literal["shift_start", "shift_end", "job_start", "job_end"]
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    location: Optional[GeoLocation] = None
+    notes: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class TimeEntryCreate(BaseModel):
+    technician_id: str
+    job_id: Optional[str] = None
+    entry_type: Literal["shift_start", "shift_end", "job_start", "job_end"]
+    location: Optional[GeoLocation] = None
+    notes: Optional[str] = None
+
+class ShiftSession(BaseModel):
+    """A complete shift from clock-in to clock-out"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    technician_id: str
+    shift_start: datetime
+    shift_start_location: Optional[GeoLocation] = None
+    shift_end: Optional[datetime] = None
+    shift_end_location: Optional[GeoLocation] = None
+    total_shift_minutes: Optional[float] = None
+    jobs_completed: int = 0
+    status: Literal["active", "completed"] = "active"
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class JobTimeEntry(BaseModel):
+    """Time tracking for a specific job"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    technician_id: str
+    job_id: str
+    job_number: Optional[str] = None
+    job_type: Optional[str] = None
+    shift_session_id: Optional[str] = None
+    
+    # Travel tracking
+    dispatch_time: Optional[datetime] = None
+    dispatch_location: Optional[GeoLocation] = None
+    estimated_travel_minutes: Optional[float] = None
+    estimated_route_distance_miles: Optional[float] = None
+    
+    # Job site arrival
+    job_start: Optional[datetime] = None
+    job_start_location: Optional[GeoLocation] = None
+    actual_travel_minutes: Optional[float] = None
+    
+    # Job completion
+    job_end: Optional[datetime] = None
+    job_end_location: Optional[GeoLocation] = None
+    actual_job_minutes: Optional[float] = None
+    
+    # Calculated metrics
+    travel_variance_minutes: Optional[float] = None  # actual - estimated
+    status: Literal["dispatched", "traveling", "on_site", "completed", "cancelled"] = "dispatched"
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class JobTimeEntryCreate(BaseModel):
+    technician_id: str
+    job_id: str
+    dispatch_location: Optional[GeoLocation] = None
+
+class TechnicianMetrics(BaseModel):
+    """Aggregated metrics for a technician"""
+    technician_id: str
+    technician_name: str
+    
+    # Travel metrics
+    avg_travel_minutes: float = 0
+    total_travel_minutes: float = 0
+    travel_entries_count: int = 0
+    travel_variance_avg: float = 0  # How accurate their travel estimates are
+    
+    # Job duration metrics by type
+    avg_job_minutes_residential_repair: float = 0
+    avg_job_minutes_commercial_repair: float = 0
+    avg_job_minutes_residential_install: float = 0
+    avg_job_minutes_commercial_install: float = 0
+    avg_job_minutes_maintenance: float = 0
+    avg_job_minutes_emergency: float = 0
+    
+    # Overall metrics
+    total_jobs_tracked: int = 0
+    total_job_minutes: float = 0
+    jobs_on_time_percentage: float = 0
+    
+    # Recent performance (last 30 days)
+    recent_avg_travel_minutes: float = 0
+    recent_travel_variance: float = 0
+    
+    last_updated: datetime = Field(default_factory=datetime.utcnow)
+
+class RouteEstimate(BaseModel):
+    """Route estimation result"""
+    origin: GeoLocation
+    destination: GeoLocation
+    estimated_minutes: float
+    estimated_miles: float
+    route_count: int = 3  # Number of routes averaged
+    confidence: Literal["high", "medium", "low"] = "medium"
+
 # ==================== BOARD CONFIGURATION ====================
 
 class StatusColumn(BaseModel):
