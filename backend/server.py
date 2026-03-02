@@ -5100,6 +5100,334 @@ async def create_customer_equipment(data: CustomerEquipmentCreate):
     await db.customer_equipment.insert_one(equipment.dict())
     return equipment
 
+# ==================== IMPORT WIZARDS API ====================
+
+@api_router.post("/import/validate")
+async def validate_import(data: dict):
+    """Validate import data before processing"""
+    import_type = data.get("type")  # customers, leads, jobs, inventory, equipment
+    records = data.get("records", [])
+    
+    if not import_type or not records:
+        raise HTTPException(status_code=400, detail="Import type and records required")
+    
+    errors = []
+    warnings = []
+    valid_count = 0
+    
+    required_fields = {
+        "customers": ["name"],
+        "leads": ["contact_name", "source"],
+        "jobs": ["customer_name", "job_type"],
+        "inventory": ["name", "sku"],
+        "equipment": ["customer_id", "equipment_type"],
+    }
+    
+    fields = required_fields.get(import_type, [])
+    
+    for idx, record in enumerate(records):
+        row_errors = []
+        row_warnings = []
+        
+        # Check required fields
+        for field in fields:
+            if not record.get(field):
+                row_errors.append(f"Missing required field: {field}")
+        
+        # Check for duplicates (basic check)
+        if import_type == "customers" and record.get("email"):
+            existing = await db.customers.find_one({"email": record["email"].lower()})
+            if existing:
+                row_warnings.append(f"Customer with email {record['email']} already exists")
+        
+        if import_type == "inventory" and record.get("sku"):
+            existing = await db.inventory_items.find_one({"sku": record["sku"]})
+            if existing:
+                row_warnings.append(f"Item with SKU {record['sku']} already exists")
+        
+        if row_errors:
+            errors.append({"row": idx + 1, "errors": row_errors})
+        else:
+            valid_count += 1
+        
+        if row_warnings:
+            warnings.append({"row": idx + 1, "warnings": row_warnings})
+    
+    return {
+        "total_records": len(records),
+        "valid_records": valid_count,
+        "invalid_records": len(errors),
+        "errors": errors[:50],  # Limit errors shown
+        "warnings": warnings[:50],
+        "can_import": len(errors) == 0
+    }
+
+@api_router.post("/import/process")
+async def process_import(data: dict):
+    """Process and import validated data"""
+    import_type = data.get("type")
+    records = data.get("records", [])
+    skip_duplicates = data.get("skip_duplicates", True)
+    
+    if not import_type or not records:
+        raise HTTPException(status_code=400, detail="Import type and records required")
+    
+    imported = 0
+    skipped = 0
+    errors = []
+    
+    for idx, record in enumerate(records):
+        try:
+            if import_type == "customers":
+                # Check duplicate
+                if skip_duplicates and record.get("email"):
+                    existing = await db.customers.find_one({"email": record["email"].lower()})
+                    if existing:
+                        skipped += 1
+                        continue
+                
+                customer = {
+                    "id": str(uuid.uuid4()),
+                    "name": sanitize_string(record.get("name", ""), 200),
+                    "email": record.get("email", "").lower() if record.get("email") else None,
+                    "phone": record.get("phone"),
+                    "address": record.get("address"),
+                    "city": record.get("city"),
+                    "state": record.get("state"),
+                    "zip_code": record.get("zip_code"),
+                    "created_at": datetime.utcnow(),
+                }
+                await db.customers.insert_one(customer)
+                imported += 1
+            
+            elif import_type == "leads":
+                lead = Lead(
+                    contact_name=sanitize_string(record.get("contact_name", ""), 200),
+                    contact_email=record.get("contact_email"),
+                    contact_phone=record.get("contact_phone"),
+                    company_name=record.get("company_name"),
+                    address=record.get("address"),
+                    city=record.get("city"),
+                    state=record.get("state"),
+                    zip_code=record.get("zip_code"),
+                    source=record.get("source", "import"),
+                    notes=record.get("notes"),
+                    estimated_value=float(record.get("estimated_value", 0) or 0),
+                )
+                await db.leads.insert_one(lead.dict())
+                imported += 1
+            
+            elif import_type == "jobs":
+                job_count = await db.jobs.count_documents({})
+                job = Job(
+                    job_number=f"JOB-{job_count + 1001}",
+                    customer_name=sanitize_string(record.get("customer_name", ""), 200),
+                    customer_email=record.get("customer_email"),
+                    customer_phone=record.get("customer_phone"),
+                    site_address=record.get("site_address", record.get("address", "")),
+                    job_type=record.get("job_type", "Service"),
+                    title=record.get("title", "Imported Job"),
+                    description=record.get("description"),
+                    priority=record.get("priority", "normal"),
+                )
+                await db.jobs.insert_one(job.dict())
+                imported += 1
+            
+            elif import_type == "inventory":
+                if skip_duplicates and record.get("sku"):
+                    existing = await db.inventory_items.find_one({"sku": record["sku"]})
+                    if existing:
+                        skipped += 1
+                        continue
+                
+                item = InventoryItem(
+                    name=sanitize_string(record.get("name", ""), 200),
+                    sku=record.get("sku", str(uuid.uuid4())[:8].upper()),
+                    category=record.get("category", "Parts"),
+                    description=record.get("description"),
+                    unit=record.get("unit", "each"),
+                    unit_cost=float(record.get("unit_cost", 0) or 0),
+                    unit_price=float(record.get("unit_price", 0) or 0),
+                    quantity_on_hand=int(record.get("quantity_on_hand", 0) or 0),
+                    min_quantity=int(record.get("min_quantity", 0) or 0),
+                )
+                await db.inventory_items.insert_one(item.dict())
+                imported += 1
+            
+            elif import_type == "equipment":
+                equipment = CustomerEquipment(
+                    customer_id=record.get("customer_id"),
+                    equipment_type=sanitize_string(record.get("equipment_type", ""), 100),
+                    manufacturer=record.get("manufacturer"),
+                    model=record.get("model"),
+                    serial_number=record.get("serial_number"),
+                    install_date=record.get("install_date"),
+                    warranty_end_date=record.get("warranty_end_date"),
+                    notes=record.get("notes"),
+                )
+                await db.customer_equipment.insert_one(equipment.dict())
+                imported += 1
+                
+        except Exception as e:
+            errors.append({"row": idx + 1, "error": str(e)})
+    
+    return {
+        "imported": imported,
+        "skipped": skipped,
+        "errors": len(errors),
+        "error_details": errors[:20],
+        "message": f"Successfully imported {imported} records"
+    }
+
+@api_router.get("/import/templates/{import_type}")
+async def get_import_template(import_type: str):
+    """Get CSV template for import type"""
+    templates = {
+        "customers": {
+            "columns": ["name", "email", "phone", "address", "city", "state", "zip_code"],
+            "sample_row": ["John Smith", "john@example.com", "555-123-4567", "123 Main St", "Austin", "TX", "78701"]
+        },
+        "leads": {
+            "columns": ["contact_name", "contact_email", "contact_phone", "company_name", "address", "city", "state", "zip_code", "source", "notes", "estimated_value"],
+            "sample_row": ["Jane Doe", "jane@company.com", "555-987-6543", "ABC Corp", "456 Oak Ave", "Houston", "TX", "77001", "website", "Interested in new AC", "5000"]
+        },
+        "jobs": {
+            "columns": ["customer_name", "customer_email", "customer_phone", "site_address", "job_type", "title", "description", "priority"],
+            "sample_row": ["John Smith", "john@example.com", "555-123-4567", "123 Main St, Austin TX", "Service", "AC Not Cooling", "System blowing warm air", "high"]
+        },
+        "inventory": {
+            "columns": ["name", "sku", "category", "description", "unit", "unit_cost", "unit_price", "quantity_on_hand", "min_quantity"],
+            "sample_row": ["Capacitor 45/5", "CAP-455", "Parts", "Run capacitor 45/5 MFD", "each", "15.00", "35.00", "10", "5"]
+        },
+        "equipment": {
+            "columns": ["customer_id", "equipment_type", "manufacturer", "model", "serial_number", "install_date", "warranty_end_date", "notes"],
+            "sample_row": ["customer-uuid-here", "AC Unit", "Carrier", "24ACC636A003", "1234567890", "2022-01-15", "2027-01-15", "Main unit"]
+        }
+    }
+    
+    if import_type not in templates:
+        raise HTTPException(status_code=404, detail=f"Unknown import type: {import_type}")
+    
+    return templates[import_type]
+
+# ==================== REPORTING & ANALYTICS API ====================
+
+@api_router.get("/reports/summary")
+async def get_reports_summary():
+    """Get summary metrics for reporting dashboard"""
+    # Job metrics
+    total_jobs = await db.jobs.count_documents({})
+    completed_jobs = await db.jobs.count_documents({"status": "completed"})
+    
+    # Revenue metrics
+    invoices = await db.invoices.find({"status": "paid"}).to_list(1000)
+    total_revenue = sum(inv.get("total", 0) for inv in invoices)
+    
+    # Lead metrics
+    total_leads = await db.leads.count_documents({})
+    won_leads = await db.leads.count_documents({"status": "won"})
+    
+    # Technician metrics
+    total_techs = await db.technicians.count_documents({})
+    
+    return {
+        "jobs": {
+            "total": total_jobs,
+            "completed": completed_jobs,
+            "completion_rate": round((completed_jobs / total_jobs * 100) if total_jobs > 0 else 0, 1)
+        },
+        "revenue": {
+            "total": total_revenue,
+            "invoice_count": len(invoices)
+        },
+        "leads": {
+            "total": total_leads,
+            "won": won_leads,
+            "conversion_rate": round((won_leads / total_leads * 100) if total_leads > 0 else 0, 1)
+        },
+        "technicians": {
+            "total": total_techs
+        }
+    }
+
+@api_router.post("/reports/query")
+async def query_reports(data: dict):
+    """Ad-hoc report query builder"""
+    entity = data.get("entity")  # jobs, leads, invoices, technicians
+    filters = data.get("filters", {})
+    group_by = data.get("group_by")
+    date_range = data.get("date_range", {})
+    aggregations = data.get("aggregations", ["count"])
+    
+    if not entity:
+        raise HTTPException(status_code=400, detail="Entity required")
+    
+    # Map entity to collection
+    collection_map = {
+        "jobs": db.jobs,
+        "leads": db.leads,
+        "invoices": db.invoices,
+        "technicians": db.technicians,
+        "pcbs": db.pcbs,
+        "proposals": db.proposals,
+    }
+    
+    collection = collection_map.get(entity)
+    if not collection:
+        raise HTTPException(status_code=400, detail=f"Unknown entity: {entity}")
+    
+    # Build query
+    query = {}
+    
+    # Apply filters
+    for field, value in filters.items():
+        if isinstance(value, list):
+            query[field] = {"$in": value}
+        else:
+            query[field] = value
+    
+    # Apply date range
+    if date_range.get("start") or date_range.get("end"):
+        date_query = {}
+        date_field = date_range.get("field", "created_at")
+        if date_range.get("start"):
+            date_query["$gte"] = datetime.fromisoformat(date_range["start"])
+        if date_range.get("end"):
+            date_query["$lte"] = datetime.fromisoformat(date_range["end"])
+        if date_query:
+            query[date_field] = date_query
+    
+    # Build aggregation pipeline
+    pipeline = [{"$match": query}]
+    
+    if group_by:
+        group_stage = {"_id": f"${group_by}"}
+        for agg in aggregations:
+            if agg == "count":
+                group_stage["count"] = {"$sum": 1}
+            elif agg == "sum" and data.get("sum_field"):
+                group_stage["sum"] = {"$sum": f"${data['sum_field']}"}
+            elif agg == "avg" and data.get("avg_field"):
+                group_stage["avg"] = {"$avg": f"${data['avg_field']}"}
+        pipeline.append({"$group": group_stage})
+        pipeline.append({"$sort": {"count": -1}})
+    else:
+        # Simple count
+        docs = await collection.find(query).to_list(1000)
+        return {
+            "count": len(docs),
+            "data": [{k: v for k, v in doc.items() if k != "_id"} for doc in docs[:100]]
+        }
+    
+    results = await collection.aggregate(pipeline).to_list(100)
+    
+    return {
+        "entity": entity,
+        "filters": filters,
+        "group_by": group_by,
+        "results": results
+    }
+
 # ==================== SEED DATA ====================
 
 @api_router.post("/seed")
