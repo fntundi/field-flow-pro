@@ -412,6 +412,10 @@ const JobDetail = () => {
               <TabsTrigger value="board" className="text-xs sm:text-sm">
                 Task Board ({tasks.length})
               </TabsTrigger>
+              <TabsTrigger value="chat" className="text-xs sm:text-sm" data-testid="job-chat-tab">
+                <MessageSquare className="w-3 h-3 mr-1" />
+                Chat
+              </TabsTrigger>
               <TabsTrigger value="details" className="text-xs sm:text-sm">
                 Details
               </TabsTrigger>
@@ -433,6 +437,10 @@ const JobDetail = () => {
                 onAddTask={handleAddTask}
               />
             )}
+          </TabsContent>
+
+          <TabsContent value="chat" className="mt-0">
+            <JobChat jobId={job.id} jobNumber={job.job_number} />
           </TabsContent>
 
           <TabsContent value="details" className="mt-0 space-y-4">
