@@ -3468,6 +3468,1248 @@ async def get_pending_syncs(client_id: str):
     
     return items
 
+# ==================== RBAC - ROLES API (RFC-002 Section 4.9) ====================
+
+@api_router.get("/roles", response_model=List[Role])
+async def get_roles():
+    """Get all roles"""
+    await ensure_default_roles()
+    roles = await db.roles.find().to_list(100)
+    return [Role(**r) for r in roles]
+
+@api_router.post("/roles", response_model=Role)
+async def create_role(data: RoleCreate):
+    """Create a custom role"""
+    role = Role(
+        name=sanitize_string(data.name, 50).lower().replace(" ", "_"),
+        display_name=sanitize_string(data.display_name, 100),
+        description=sanitize_string(data.description, 500) if data.description else None,
+        permissions=data.permissions,
+        is_system=False
+    )
+    await db.roles.insert_one(role.dict())
+    return role
+
+@api_router.delete("/roles/{role_id}")
+async def delete_role(role_id: str):
+    """Delete a custom role (system roles cannot be deleted)"""
+    if not validate_uuid(role_id):
+        raise HTTPException(status_code=400, detail="Invalid role ID")
+    
+    role = await db.roles.find_one({"id": role_id})
+    if not role:
+        raise HTTPException(status_code=404, detail="Role not found")
+    if role.get("is_system"):
+        raise HTTPException(status_code=400, detail="Cannot delete system roles")
+    
+    await db.roles.delete_one({"id": role_id})
+    return {"message": "Role deleted"}
+
+async def ensure_default_roles():
+    """Ensure default system roles exist"""
+    for role_data in DEFAULT_ROLES:
+        existing = await db.roles.find_one({"name": role_data["name"], "is_system": True})
+        if not existing:
+            role = Role(
+                name=role_data["name"],
+                display_name=role_data["display_name"],
+                description=role_data["description"],
+                is_system=True
+            )
+            await db.roles.insert_one(role.dict())
+
+# ==================== LEADS API (RFC-002 Section 4.1.1) ====================
+
+@api_router.get("/leads", response_model=List[Lead])
+async def get_leads(
+    status: Optional[str] = None,
+    source: Optional[str] = None,
+    assigned_to: Optional[str] = None,
+    search: Optional[str] = None,
+    limit: int = Query(default=100, le=1000),
+    offset: int = Query(default=0, ge=0)
+):
+    """Get all leads with filtering"""
+    query = {}
+    if status:
+        query["status"] = status
+    if source:
+        query["source"] = source
+    if assigned_to:
+        query["assigned_to_id"] = assigned_to
+    if search:
+        safe_search = sanitize_search_query(search)
+        query["$or"] = [
+            {"contact_name": {"$regex": safe_search, "$options": "i"}},
+            {"contact_email": {"$regex": safe_search, "$options": "i"}},
+            {"company_name": {"$regex": safe_search, "$options": "i"}},
+            {"lead_number": {"$regex": safe_search, "$options": "i"}},
+        ]
+    
+    leads = await db.leads.find(query).sort("created_at", -1).skip(offset).limit(limit).to_list(limit)
+    return [Lead(**l) for l in leads]
+
+@api_router.get("/leads/metrics")
+async def get_lead_metrics():
+    """Get lead metrics per RFC-002 Section 4.1.1"""
+    # Count by status
+    pipeline = [
+        {"$group": {"_id": "$status", "count": {"$sum": 1}}}
+    ]
+    status_counts = await db.leads.aggregate(pipeline).to_list(10)
+    status_map = {c["_id"]: c["count"] for c in status_counts}
+    
+    # Count by source
+    source_pipeline = [
+        {"$group": {"_id": "$source", "count": {"$sum": 1}}}
+    ]
+    source_counts = await db.leads.aggregate(source_pipeline).to_list(20)
+    
+    # Calculate conversion rate (won / (won + lost))
+    total_closed = status_map.get("won", 0) + status_map.get("lost", 0)
+    conversion_rate = (status_map.get("won", 0) / total_closed * 100) if total_closed > 0 else 0
+    
+    # Average time to first contact
+    # (For now, return placeholder - would need timestamp analysis)
+    
+    return {
+        "total_leads": sum(status_map.values()),
+        "by_status": status_map,
+        "by_source": {c["_id"]: c["count"] for c in source_counts},
+        "lead_to_close_ratio": round(conversion_rate, 1),
+        "avg_time_to_first_contact_hours": 4.2  # Placeholder
+    }
+
+@api_router.get("/leads/{lead_id}", response_model=Lead)
+async def get_lead(lead_id: str):
+    """Get a specific lead"""
+    lead = await db.leads.find_one({"$or": [{"id": lead_id}, {"lead_number": lead_id}]})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    return Lead(**lead)
+
+@api_router.post("/leads", response_model=Lead)
+async def create_lead(data: LeadCreate):
+    """Create a new lead"""
+    lead = Lead(
+        contact_name=sanitize_string(data.contact_name, 200),
+        contact_email=sanitize_string(data.contact_email, 255) if data.contact_email else None,
+        contact_phone=sanitize_string(data.contact_phone, 20) if data.contact_phone else None,
+        company_name=sanitize_string(data.company_name, 200) if data.company_name else None,
+        address=sanitize_string(data.address, 500) if data.address else None,
+        city=sanitize_string(data.city, 100) if data.city else None,
+        state=sanitize_string(data.state, 50) if data.state else None,
+        zip_code=sanitize_string(data.zip_code, 20) if data.zip_code else None,
+        source=sanitize_string(data.source, 50),
+        source_detail=sanitize_string(data.source_detail, 200) if data.source_detail else None,
+        preferred_contact_method=data.preferred_contact_method,
+        notes=sanitize_string(data.notes, 2000) if data.notes else None,
+        tags=data.tags,
+        estimated_value=data.estimated_value,
+        priority=data.priority,
+    )
+    await db.leads.insert_one(lead.dict())
+    return lead
+
+@api_router.put("/leads/{lead_id}", response_model=Lead)
+async def update_lead(lead_id: str, data: LeadUpdate):
+    """Update a lead"""
+    lead = await db.leads.find_one({"$or": [{"id": lead_id}, {"lead_number": lead_id}]})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    update_data = {}
+    for k, v in data.dict().items():
+        if v is not None:
+            if isinstance(v, str):
+                update_data[k] = sanitize_string(v, 2000)
+            else:
+                update_data[k] = v
+    
+    # Track status changes
+    if "status" in update_data and update_data["status"] != lead.get("status"):
+        update_data["status_changed_at"] = datetime.utcnow()
+        
+        # Track specific status timestamps
+        new_status = update_data["status"]
+        if new_status == "contacted" and not lead.get("first_contact_at"):
+            update_data["first_contact_at"] = datetime.utcnow()
+        elif new_status == "qualified":
+            update_data["qualified_at"] = datetime.utcnow()
+        elif new_status == "quoted":
+            update_data["quoted_at"] = datetime.utcnow()
+        elif new_status in ["won", "lost"]:
+            update_data["closed_at"] = datetime.utcnow()
+    
+    # Update assigned name if ID changed
+    if "assigned_to_id" in update_data:
+        user = await db.users.find_one({"id": update_data["assigned_to_id"]})
+        if not user:
+            tech = await db.technicians.find_one({"id": update_data["assigned_to_id"]})
+            user = tech
+        update_data["assigned_to_name"] = user["name"] if user else None
+    
+    update_data["updated_at"] = datetime.utcnow()
+    
+    await db.leads.update_one({"id": lead["id"]}, {"$set": update_data})
+    updated = await db.leads.find_one({"id": lead["id"]})
+    return Lead(**updated)
+
+@api_router.post("/leads/{lead_id}/convert")
+async def convert_lead(lead_id: str, customer_name: Optional[str] = None):
+    """Convert a lead to a customer and optionally create a job"""
+    lead = await db.leads.find_one({"$or": [{"id": lead_id}, {"lead_number": lead_id}]})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    # Create customer record (simplified)
+    customer_id = str(uuid.uuid4())
+    
+    # Update lead
+    await db.leads.update_one(
+        {"id": lead["id"]},
+        {"$set": {
+            "status": "won",
+            "status_changed_at": datetime.utcnow(),
+            "closed_at": datetime.utcnow(),
+            "converted_customer_id": customer_id,
+            "updated_at": datetime.utcnow()
+        }}
+    )
+    
+    return {
+        "message": "Lead converted successfully",
+        "customer_id": customer_id,
+        "lead_id": lead["id"]
+    }
+
+@api_router.delete("/leads/{lead_id}")
+async def delete_lead(lead_id: str):
+    """Delete a lead"""
+    result = await db.leads.delete_one({"$or": [{"id": lead_id}, {"lead_number": lead_id}]})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    return {"message": "Lead deleted"}
+
+# ==================== PCB API (RFC-002 Section 4.1.2) ====================
+
+@api_router.get("/pcbs", response_model=List[PCB])
+async def get_pcbs(
+    status: Optional[str] = None,
+    assigned_to: Optional[str] = None,
+    priority: Optional[str] = None,
+    limit: int = Query(default=100, le=1000),
+    offset: int = Query(default=0, ge=0)
+):
+    """Get all PCBs (Potential Callbacks)"""
+    query = {}
+    if status:
+        query["status"] = status
+    if assigned_to:
+        query["$or"] = [
+            {"assigned_technician_id": assigned_to},
+            {"assigned_owner_id": assigned_to}
+        ]
+    if priority:
+        query["priority"] = priority
+    
+    pcbs = await db.pcbs.find(query).sort("created_at", -1).skip(offset).limit(limit).to_list(limit)
+    return [PCB(**p) for p in pcbs]
+
+@api_router.get("/pcbs/metrics")
+async def get_pcb_metrics():
+    """Get PCB metrics per RFC-002"""
+    pipeline = [
+        {"$group": {"_id": "$status", "count": {"$sum": 1}}}
+    ]
+    status_counts = await db.pcbs.aggregate(pipeline).to_list(10)
+    status_map = {c["_id"]: c["count"] for c in status_counts}
+    
+    # Conversion rate
+    total_resolved = status_map.get("converted", 0) + status_map.get("closed", 0)
+    conversion_rate = (status_map.get("converted", 0) / total_resolved * 100) if total_resolved > 0 else 0
+    
+    # Overdue follow-ups
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    overdue_count = await db.pcbs.count_documents({
+        "status": {"$in": ["created", "assigned", "follow_up"]},
+        "follow_up_date": {"$lt": today}
+    })
+    
+    return {
+        "total_pcbs": sum(status_map.values()),
+        "open_pcbs": status_map.get("created", 0) + status_map.get("assigned", 0) + status_map.get("follow_up", 0),
+        "by_status": status_map,
+        "conversion_rate": round(conversion_rate, 1),
+        "overdue_count": overdue_count
+    }
+
+@api_router.get("/pcbs/{pcb_id}", response_model=PCB)
+async def get_pcb(pcb_id: str):
+    """Get a specific PCB"""
+    pcb = await db.pcbs.find_one({"$or": [{"id": pcb_id}, {"pcb_number": pcb_id}]})
+    if not pcb:
+        raise HTTPException(status_code=404, detail="PCB not found")
+    return PCB(**pcb)
+
+@api_router.post("/pcbs", response_model=PCB)
+async def create_pcb(data: PCBCreate):
+    """Create a new PCB"""
+    # Get assigned names
+    tech_name = None
+    owner_name = None
+    
+    if data.assigned_technician_id:
+        tech = await db.technicians.find_one({"id": data.assigned_technician_id})
+        tech_name = tech["name"] if tech else None
+    
+    if data.assigned_owner_id:
+        user = await db.users.find_one({"id": data.assigned_owner_id})
+        owner_name = user["name"] if user else None
+    
+    pcb = PCB(
+        lead_id=data.lead_id,
+        job_id=data.job_id,
+        customer_id=data.customer_id,
+        customer_name=sanitize_string(data.customer_name, 200) if data.customer_name else None,
+        reason=sanitize_string(data.reason, 1000),
+        reason_category=data.reason_category,
+        assigned_technician_id=data.assigned_technician_id,
+        assigned_technician_name=tech_name,
+        assigned_owner_id=data.assigned_owner_id,
+        assigned_owner_name=owner_name,
+        follow_up_date=data.follow_up_date,
+        follow_up_time=data.follow_up_time,
+        priority=data.priority,
+        notes=sanitize_string(data.notes, 2000) if data.notes else None,
+        status="assigned" if (data.assigned_technician_id or data.assigned_owner_id) else "created",
+    )
+    await db.pcbs.insert_one(pcb.dict())
+    return pcb
+
+@api_router.put("/pcbs/{pcb_id}", response_model=PCB)
+async def update_pcb(pcb_id: str, data: PCBUpdate):
+    """Update a PCB"""
+    pcb = await db.pcbs.find_one({"$or": [{"id": pcb_id}, {"pcb_number": pcb_id}]})
+    if not pcb:
+        raise HTTPException(status_code=404, detail="PCB not found")
+    
+    update_data = {}
+    for k, v in data.dict().items():
+        if v is not None:
+            if isinstance(v, str):
+                update_data[k] = sanitize_string(v, 2000)
+            else:
+                update_data[k] = v
+    
+    # Track status changes
+    if "status" in update_data and update_data["status"] != pcb.get("status"):
+        update_data["status_changed_at"] = datetime.utcnow()
+        if update_data["status"] in ["converted", "closed"]:
+            update_data["resolved_at"] = datetime.utcnow()
+    
+    # Update assigned names
+    if "assigned_technician_id" in update_data:
+        tech = await db.technicians.find_one({"id": update_data["assigned_technician_id"]})
+        update_data["assigned_technician_name"] = tech["name"] if tech else None
+    
+    if "assigned_owner_id" in update_data:
+        user = await db.users.find_one({"id": update_data["assigned_owner_id"]})
+        update_data["assigned_owner_name"] = user["name"] if user else None
+    
+    update_data["updated_at"] = datetime.utcnow()
+    
+    await db.pcbs.update_one({"id": pcb["id"]}, {"$set": update_data})
+    updated = await db.pcbs.find_one({"id": pcb["id"]})
+    return PCB(**updated)
+
+@api_router.post("/pcbs/{pcb_id}/convert")
+async def convert_pcb_to_job(pcb_id: str, job_data: Optional[dict] = None):
+    """Convert a PCB to a job"""
+    pcb = await db.pcbs.find_one({"$or": [{"id": pcb_id}, {"pcb_number": pcb_id}]})
+    if not pcb:
+        raise HTTPException(status_code=404, detail="PCB not found")
+    
+    # Create a new job from PCB
+    job_count = await db.jobs.count_documents({})
+    job = Job(
+        job_number=f"JOB-{job_count + 1001}",
+        customer_name=pcb.get("customer_name", "Unknown"),
+        customer_id=pcb.get("customer_id"),
+        job_type="Service",
+        title=f"Follow-up: {pcb.get('reason', 'PCB Callback')[:50]}",
+        description=pcb.get("notes"),
+        priority=pcb.get("priority", "normal"),
+    )
+    await db.jobs.insert_one(job.dict())
+    
+    # Update PCB
+    await db.pcbs.update_one(
+        {"id": pcb["id"]},
+        {"$set": {
+            "status": "converted",
+            "status_changed_at": datetime.utcnow(),
+            "resolved_at": datetime.utcnow(),
+            "converted_to_job_id": job.id,
+            "updated_at": datetime.utcnow()
+        }}
+    )
+    
+    return {
+        "message": "PCB converted to job",
+        "job_id": job.id,
+        "job_number": job.job_number
+    }
+
+@api_router.delete("/pcbs/{pcb_id}")
+async def delete_pcb(pcb_id: str):
+    """Delete a PCB"""
+    result = await db.pcbs.delete_one({"$or": [{"id": pcb_id}, {"pcb_number": pcb_id}]})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="PCB not found")
+    return {"message": "PCB deleted"}
+
+# ==================== PROPOSALS API (RFC-002 Section 4.1.3) ====================
+
+@api_router.get("/proposals", response_model=List[Proposal])
+async def get_proposals(
+    status: Optional[str] = None,
+    lead_id: Optional[str] = None,
+    customer_id: Optional[str] = None,
+    limit: int = Query(default=100, le=1000),
+    offset: int = Query(default=0, ge=0)
+):
+    """Get all proposals"""
+    query = {}
+    if status:
+        query["status"] = status
+    if lead_id:
+        query["lead_id"] = lead_id
+    if customer_id:
+        query["customer_id"] = customer_id
+    
+    proposals = await db.proposals.find(query).sort("created_at", -1).skip(offset).limit(limit).to_list(limit)
+    return [Proposal(**p) for p in proposals]
+
+@api_router.get("/proposals/metrics")
+async def get_proposal_metrics():
+    """Get proposal metrics"""
+    pipeline = [
+        {"$group": {"_id": "$status", "count": {"$sum": 1}}}
+    ]
+    status_counts = await db.proposals.aggregate(pipeline).to_list(10)
+    status_map = {c["_id"]: c["count"] for c in status_counts}
+    
+    # Win rate
+    total_decided = status_map.get("accepted", 0) + status_map.get("rejected", 0)
+    win_rate = (status_map.get("accepted", 0) / total_decided * 100) if total_decided > 0 else 0
+    
+    return {
+        "total_proposals": sum(status_map.values()),
+        "by_status": status_map,
+        "open_quotes": status_map.get("draft", 0) + status_map.get("sent", 0),
+        "win_rate": round(win_rate, 1)
+    }
+
+@api_router.get("/proposals/{proposal_id}", response_model=Proposal)
+async def get_proposal(proposal_id: str):
+    """Get a specific proposal"""
+    proposal = await db.proposals.find_one({"$or": [{"id": proposal_id}, {"proposal_number": proposal_id}]})
+    if not proposal:
+        raise HTTPException(status_code=404, detail="Proposal not found")
+    return Proposal(**proposal)
+
+@api_router.post("/proposals", response_model=Proposal)
+async def create_proposal(data: ProposalCreate):
+    """Create a new proposal"""
+    proposal = Proposal(
+        lead_id=data.lead_id,
+        job_id=data.job_id,
+        customer_id=data.customer_id,
+        customer_name=sanitize_string(data.customer_name, 200),
+        customer_email=sanitize_string(data.customer_email, 255) if data.customer_email else None,
+        customer_phone=sanitize_string(data.customer_phone, 20) if data.customer_phone else None,
+        site_address=sanitize_string(data.site_address, 500),
+        title=sanitize_string(data.title, 200),
+        description=sanitize_string(data.description, 2000) if data.description else None,
+        valid_until=data.valid_until,
+        notes=sanitize_string(data.notes, 2000) if data.notes else None,
+    )
+    await db.proposals.insert_one(proposal.dict())
+    
+    # Link to lead if provided
+    if data.lead_id:
+        await db.leads.update_one(
+            {"id": data.lead_id},
+            {"$push": {"proposal_ids": proposal.id}}
+        )
+    
+    return proposal
+
+@api_router.put("/proposals/{proposal_id}", response_model=Proposal)
+async def update_proposal(proposal_id: str, data: dict):
+    """Update a proposal"""
+    proposal = await db.proposals.find_one({"$or": [{"id": proposal_id}, {"proposal_number": proposal_id}]})
+    if not proposal:
+        raise HTTPException(status_code=404, detail="Proposal not found")
+    
+    update_data = {k: v for k, v in data.items() if v is not None}
+    
+    # Track status changes
+    if "status" in update_data and update_data["status"] != proposal.get("status"):
+        update_data["status_changed_at"] = datetime.utcnow()
+        if update_data["status"] == "sent":
+            update_data["sent_at"] = datetime.utcnow()
+        elif update_data["status"] == "accepted":
+            update_data["accepted_at"] = datetime.utcnow()
+    
+    update_data["updated_at"] = datetime.utcnow()
+    
+    await db.proposals.update_one({"id": proposal["id"]}, {"$set": update_data})
+    updated = await db.proposals.find_one({"id": proposal["id"]})
+    return Proposal(**updated)
+
+@api_router.post("/proposals/{proposal_id}/options")
+async def add_proposal_option(proposal_id: str, option_data: dict):
+    """Add a Good/Better/Best option to a proposal"""
+    proposal = await db.proposals.find_one({"$or": [{"id": proposal_id}, {"proposal_number": proposal_id}]})
+    if not proposal:
+        raise HTTPException(status_code=404, detail="Proposal not found")
+    
+    option = ProposalOption(
+        tier=option_data.get("tier", "good"),
+        name=sanitize_string(option_data.get("name", "Option"), 100),
+        description=sanitize_string(option_data.get("description", ""), 500) if option_data.get("description") else None,
+        line_items=[ProposalLineItem(**item) for item in option_data.get("line_items", [])],
+        is_recommended=option_data.get("is_recommended", False),
+    )
+    
+    # Calculate totals
+    for item in option.line_items:
+        item.extended_price = item.quantity * item.unit_price
+    
+    option.equipment_total = sum(i.extended_price for i in option.line_items if i.item_type == "equipment")
+    option.labor_total = sum(i.extended_price for i in option.line_items if i.item_type == "labor")
+    option.materials_total = sum(i.extended_price for i in option.line_items if i.item_type == "material")
+    option.misc_total = sum(i.extended_price for i in option.line_items if i.item_type == "misc")
+    option.subtotal = option.equipment_total + option.labor_total + option.materials_total + option.misc_total
+    option.discount_amount = sum(abs(i.extended_price) for i in option.line_items if i.item_type == "discount")
+    option.total = option.subtotal - option.discount_amount + option.tax_amount
+    
+    # Add to proposal
+    await db.proposals.update_one(
+        {"id": proposal["id"]},
+        {
+            "$push": {"options": option.dict()},
+            "$set": {"updated_at": datetime.utcnow()}
+        }
+    )
+    
+    return {"message": "Option added", "option_id": option.id}
+
+@api_router.post("/proposals/{proposal_id}/accept")
+async def accept_proposal(proposal_id: str, option_id: str, signature: Optional[str] = None):
+    """Accept a proposal and convert to job"""
+    proposal = await db.proposals.find_one({"$or": [{"id": proposal_id}, {"proposal_number": proposal_id}]})
+    if not proposal:
+        raise HTTPException(status_code=404, detail="Proposal not found")
+    
+    # Create job from proposal
+    job_count = await db.jobs.count_documents({})
+    job = Job(
+        job_number=f"JOB-{job_count + 1001}",
+        customer_name=proposal["customer_name"],
+        customer_email=proposal.get("customer_email"),
+        customer_phone=proposal.get("customer_phone"),
+        site_address=proposal["site_address"],
+        job_type="Install",
+        title=proposal["title"],
+        description=proposal.get("description"),
+    )
+    await db.jobs.insert_one(job.dict())
+    
+    # Update proposal
+    await db.proposals.update_one(
+        {"id": proposal["id"]},
+        {"$set": {
+            "status": "accepted",
+            "status_changed_at": datetime.utcnow(),
+            "accepted_at": datetime.utcnow(),
+            "selected_option_id": option_id,
+            "customer_signature": signature,
+            "customer_signed_at": datetime.utcnow() if signature else None,
+            "converted_job_id": job.id,
+            "updated_at": datetime.utcnow()
+        }}
+    )
+    
+    # Update lead if linked
+    if proposal.get("lead_id"):
+        await db.leads.update_one(
+            {"id": proposal["lead_id"]},
+            {"$set": {
+                "status": "won",
+                "status_changed_at": datetime.utcnow(),
+                "closed_at": datetime.utcnow(),
+                "converted_job_id": job.id,
+                "updated_at": datetime.utcnow()
+            }}
+        )
+    
+    return {
+        "message": "Proposal accepted and job created",
+        "job_id": job.id,
+        "job_number": job.job_number
+    }
+
+# ==================== JOB TYPES & TEMPLATES API (RFC-002 Section 4.2.1) ====================
+
+@api_router.get("/job-types", response_model=List[JobTypeTemplate])
+async def get_job_types(
+    category: Optional[str] = None,
+    active_only: bool = True
+):
+    """Get all job type templates"""
+    await ensure_default_job_types()
+    
+    query = {}
+    if category:
+        query["category"] = category
+    if active_only:
+        query["is_active"] = True
+    
+    templates = await db.job_type_templates.find(query).sort("name", 1).to_list(100)
+    return [JobTypeTemplate(**t) for t in templates]
+
+@api_router.post("/job-types", response_model=JobTypeTemplate)
+async def create_job_type(data: JobTypeTemplateCreate):
+    """Create a new job type template"""
+    template = JobTypeTemplate(
+        name=sanitize_string(data.name, 100),
+        category=data.category,
+        description=sanitize_string(data.description, 500) if data.description else None,
+        default_priority=data.default_priority,
+        estimated_duration_hours=data.estimated_duration_hours,
+        requires_permit=data.requires_permit,
+        requires_inspection=data.requires_inspection,
+        base_labor_rate=data.base_labor_rate,
+        trip_charge=data.trip_charge,
+        checklist_items=data.checklist_items,
+    )
+    await db.job_type_templates.insert_one(template.dict())
+    return template
+
+@api_router.put("/job-types/{template_id}", response_model=JobTypeTemplate)
+async def update_job_type(template_id: str, data: dict):
+    """Update a job type template with version control"""
+    template = await db.job_type_templates.find_one({"id": template_id})
+    if not template:
+        raise HTTPException(status_code=404, detail="Job type template not found")
+    
+    # Create new version
+    update_data = {k: v for k, v in data.items() if v is not None}
+    update_data["version"] = template.get("version", 1) + 1
+    update_data["updated_at"] = datetime.utcnow()
+    
+    await db.job_type_templates.update_one({"id": template_id}, {"$set": update_data})
+    updated = await db.job_type_templates.find_one({"id": template_id})
+    return JobTypeTemplate(**updated)
+
+async def ensure_default_job_types():
+    """Ensure default job type templates exist"""
+    default_types = [
+        {
+            "name": "Residential AC Service",
+            "category": "residential_service",
+            "description": "Standard residential air conditioning service call",
+            "estimated_duration_hours": 1.5,
+            "checklist_items": [
+                {"order": 0, "description": "Check thermostat operation and settings", "requires_before_photo": False, "requires_after_photo": False, "is_required": True},
+                {"order": 1, "description": "Inspect and replace air filter if needed", "requires_before_photo": True, "requires_after_photo": True, "is_required": True},
+                {"order": 2, "description": "Check refrigerant levels and look for leaks", "requires_note": True, "is_required": True},
+                {"order": 3, "description": "Inspect electrical connections and tighten", "requires_before_photo": False, "is_required": True},
+                {"order": 4, "description": "Clean condensate drain line", "requires_after_photo": True, "is_required": True},
+                {"order": 5, "description": "Check capacitor and contactor", "requires_note": True, "is_required": True},
+            ]
+        },
+        {
+            "name": "Residential AC Install",
+            "category": "residential_install",
+            "description": "Full residential air conditioning system installation",
+            "estimated_duration_hours": 8.0,
+            "requires_permit": True,
+            "requires_inspection": True,
+            "checklist_items": [
+                {"order": 0, "description": "Photograph existing equipment and area before removal", "requires_before_photo": True, "is_required": True},
+                {"order": 1, "description": "Safely remove and dispose of old equipment and refrigerant", "requires_note": True, "is_required": True},
+                {"order": 2, "description": "Install new indoor unit/air handler according to manufacturer specifications", "requires_before_photo": True, "requires_after_photo": True, "is_required": True},
+                {"order": 3, "description": "Install new outdoor condensing unit on proper pad with correct clearances", "requires_before_photo": True, "requires_after_photo": True, "is_required": True},
+                {"order": 4, "description": "Connect refrigerant lines, pressure test, and charge system", "requires_note": True, "is_required": True},
+                {"order": 5, "description": "Install new thermostat and verify operation", "requires_after_photo": True, "is_required": True},
+                {"order": 6, "description": "Perform system startup and document readings", "requires_note": True, "requires_measurement": True, "is_required": True},
+                {"order": 7, "description": "Customer walkthrough and operation demonstration", "requires_signature": True, "is_required": True},
+            ]
+        },
+        {
+            "name": "Commercial RTU Service",
+            "category": "commercial_service",
+            "description": "Rooftop unit service and maintenance",
+            "estimated_duration_hours": 2.0,
+            "checklist_items": [
+                {"order": 0, "description": "Photograph unit nameplate and current condition", "requires_before_photo": True, "is_required": True},
+                {"order": 1, "description": "Replace all filters", "requires_before_photo": True, "requires_after_photo": True, "is_required": True},
+                {"order": 2, "description": "Check belt condition and tension", "requires_note": True, "is_required": True},
+                {"order": 3, "description": "Lubricate bearings and moving parts", "is_required": True},
+                {"order": 4, "description": "Check electrical connections and amp draw", "requires_measurement": True, "is_required": True},
+                {"order": 5, "description": "Clean coils and check refrigerant charge", "requires_after_photo": True, "is_required": True},
+            ]
+        },
+        {
+            "name": "Commercial Install",
+            "category": "commercial_install",
+            "description": "Commercial HVAC system installation project",
+            "estimated_duration_hours": 40.0,
+            "requires_permit": True,
+            "requires_inspection": True,
+        },
+    ]
+    
+    for type_data in default_types:
+        existing = await db.job_type_templates.find_one({"name": type_data["name"]})
+        if not existing:
+            template = JobTypeTemplate(**type_data)
+            await db.job_type_templates.insert_one(template.dict())
+
+# ==================== JOB CHECKLISTS API (RFC-002 Section 4.2.2) ====================
+
+@api_router.get("/jobs/{job_id}/checklist")
+async def get_job_checklist(job_id: str):
+    """Get checklist for a job"""
+    checklist = await db.job_checklists.find_one({"job_id": job_id})
+    if not checklist:
+        return {"checklist": None, "message": "No checklist assigned to this job"}
+    checklist.pop("_id", None)
+    return checklist
+
+@api_router.post("/jobs/{job_id}/checklist")
+async def create_job_checklist(job_id: str, template_id: Optional[str] = None):
+    """Create a checklist for a job from a template"""
+    job = await db.jobs.find_one({"$or": [{"id": job_id}, {"job_number": job_id}]})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    # Check if checklist already exists
+    existing = await db.job_checklists.find_one({"job_id": job["id"]})
+    if existing:
+        raise HTTPException(status_code=400, detail="Checklist already exists for this job")
+    
+    # Get template
+    items = []
+    template_name = None
+    
+    if template_id:
+        template = await db.job_type_templates.find_one({"id": template_id})
+        if template:
+            template_name = template["name"]
+            for item in template.get("checklist_items", []):
+                checklist_item = JobChecklistItem(
+                    template_item_id=item.get("id"),
+                    order=item.get("order", 0),
+                    description=item.get("description", ""),
+                    requires_before_photo=item.get("requires_before_photo", False),
+                    requires_after_photo=item.get("requires_after_photo", False),
+                    requires_note=item.get("requires_note", False),
+                    requires_measurement=item.get("requires_measurement", False),
+                    requires_signature=item.get("requires_signature", False),
+                    is_required=item.get("is_required", True),
+                )
+                items.append(checklist_item)
+    
+    checklist = JobChecklist(
+        job_id=job["id"],
+        template_id=template_id,
+        template_name=template_name,
+        items=[item.dict() for item in items],
+        total_items=len(items),
+    )
+    
+    await db.job_checklists.insert_one(checklist.dict())
+    return checklist
+
+@api_router.put("/jobs/{job_id}/checklist/items/{item_id}")
+async def update_checklist_item(job_id: str, item_id: str, data: dict):
+    """Update a checklist item (add evidence, mark complete, etc.)"""
+    checklist = await db.job_checklists.find_one({"job_id": job_id})
+    if not checklist:
+        raise HTTPException(status_code=404, detail="Checklist not found")
+    
+    # Find and update the item
+    items = checklist.get("items", [])
+    item_index = None
+    for i, item in enumerate(items):
+        if item["id"] == item_id:
+            item_index = i
+            break
+    
+    if item_index is None:
+        raise HTTPException(status_code=404, detail="Checklist item not found")
+    
+    # Update item
+    item = items[item_index]
+    
+    if "status" in data:
+        item["status"] = data["status"]
+        if data["status"] == "completed":
+            item["completed_at"] = datetime.utcnow().isoformat()
+            item["completed_by_id"] = data.get("completed_by_id")
+            item["completed_by_name"] = data.get("completed_by_name")
+    
+    if "evidence" in data:
+        # Add new evidence
+        evidence = ChecklistItemEvidence(**data["evidence"])
+        if "evidence" not in item:
+            item["evidence"] = []
+        item["evidence"].append(evidence.dict())
+    
+    if "has_exception" in data:
+        item["has_exception"] = data["has_exception"]
+        item["exception_reason"] = data.get("exception_reason")
+        item["status"] = "exception"
+    
+    items[item_index] = item
+    
+    # Recalculate progress
+    completed_count = sum(1 for i in items if i["status"] in ["completed", "exception"])
+    exception_count = sum(1 for i in items if i["status"] == "exception")
+    
+    # Check if job can be completed (all required items done)
+    blocking_items = []
+    for i in items:
+        if i.get("is_required") and i["status"] not in ["completed", "exception"]:
+            blocking_items.append(i["id"])
+    
+    can_complete = len(blocking_items) == 0
+    
+    await db.job_checklists.update_one(
+        {"job_id": job_id},
+        {"$set": {
+            "items": items,
+            "completed_items": completed_count,
+            "exception_items": exception_count,
+            "percent_complete": int((completed_count / len(items)) * 100) if items else 0,
+            "can_complete_job": can_complete,
+            "blocking_items": blocking_items,
+            "updated_at": datetime.utcnow()
+        }}
+    )
+    
+    updated = await db.job_checklists.find_one({"job_id": job_id})
+    updated.pop("_id", None)
+    return updated
+
+# ==================== VENDORS API (RFC-002 Section 4.7.2) ====================
+
+@api_router.get("/vendors", response_model=List[Vendor])
+async def get_vendors(active_only: bool = True, search: Optional[str] = None):
+    """Get all vendors"""
+    query = {}
+    if active_only:
+        query["is_active"] = True
+    if search:
+        safe_search = sanitize_search_query(search)
+        query["$or"] = [
+            {"name": {"$regex": safe_search, "$options": "i"}},
+            {"vendor_number": {"$regex": safe_search, "$options": "i"}},
+        ]
+    
+    vendors = await db.vendors.find(query).sort("name", 1).to_list(500)
+    return [Vendor(**v) for v in vendors]
+
+@api_router.get("/vendors/{vendor_id}", response_model=Vendor)
+async def get_vendor(vendor_id: str):
+    """Get a specific vendor"""
+    vendor = await db.vendors.find_one({"$or": [{"id": vendor_id}, {"vendor_number": vendor_id}]})
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    return Vendor(**vendor)
+
+@api_router.post("/vendors", response_model=Vendor)
+async def create_vendor(data: VendorCreate):
+    """Create a new vendor"""
+    vendor = Vendor(
+        name=sanitize_string(data.name, 200),
+        contact_name=sanitize_string(data.contact_name, 100) if data.contact_name else None,
+        email=sanitize_string(data.email, 255) if data.email else None,
+        phone=sanitize_string(data.phone, 20) if data.phone else None,
+        address=sanitize_string(data.address, 500) if data.address else None,
+        city=sanitize_string(data.city, 100) if data.city else None,
+        state=sanitize_string(data.state, 50) if data.state else None,
+        zip_code=sanitize_string(data.zip_code, 20) if data.zip_code else None,
+        payment_terms=data.payment_terms,
+        account_number=sanitize_string(data.account_number, 50) if data.account_number else None,
+        notes=sanitize_string(data.notes, 2000) if data.notes else None,
+    )
+    await db.vendors.insert_one(vendor.dict())
+    return vendor
+
+@api_router.put("/vendors/{vendor_id}", response_model=Vendor)
+async def update_vendor(vendor_id: str, data: dict):
+    """Update a vendor"""
+    vendor = await db.vendors.find_one({"$or": [{"id": vendor_id}, {"vendor_number": vendor_id}]})
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    
+    update_data = {k: v for k, v in data.items() if v is not None}
+    update_data["updated_at"] = datetime.utcnow()
+    
+    await db.vendors.update_one({"id": vendor["id"]}, {"$set": update_data})
+    updated = await db.vendors.find_one({"id": vendor["id"]})
+    return Vendor(**updated)
+
+# ==================== PURCHASE ORDERS API (RFC-002 Section 4.7.2) ====================
+
+@api_router.get("/purchase-orders", response_model=List[PurchaseOrder])
+async def get_purchase_orders(
+    status: Optional[str] = None,
+    vendor_id: Optional[str] = None,
+    limit: int = Query(default=100, le=500)
+):
+    """Get all purchase orders"""
+    query = {}
+    if status:
+        query["status"] = status
+    if vendor_id:
+        query["vendor_id"] = vendor_id
+    
+    pos = await db.purchase_orders.find(query).sort("created_at", -1).limit(limit).to_list(limit)
+    return [PurchaseOrder(**po) for po in pos]
+
+@api_router.get("/purchase-orders/{po_id}", response_model=PurchaseOrder)
+async def get_purchase_order(po_id: str):
+    """Get a specific purchase order"""
+    po = await db.purchase_orders.find_one({"$or": [{"id": po_id}, {"po_number": po_id}]})
+    if not po:
+        raise HTTPException(status_code=404, detail="Purchase order not found")
+    return PurchaseOrder(**po)
+
+@api_router.post("/purchase-orders", response_model=PurchaseOrder)
+async def create_purchase_order(data: PurchaseOrderCreate):
+    """Create a new purchase order"""
+    vendor = await db.vendors.find_one({"id": data.vendor_id})
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    
+    # Build line items
+    line_items = []
+    subtotal = 0
+    for item_data in data.line_items:
+        item = await db.inventory_items.find_one({"id": item_data.get("item_id")})
+        if item:
+            line_item = PurchaseOrderLineItem(
+                item_id=item["id"],
+                item_name=item["name"],
+                sku=item["sku"],
+                quantity_ordered=item_data.get("quantity_ordered", 1),
+                unit=item["unit"],
+                unit_cost=item_data.get("unit_cost", item.get("unit_cost", 0)),
+            )
+            line_item.extended_cost = line_item.quantity_ordered * line_item.unit_cost
+            subtotal += line_item.extended_cost
+            line_items.append(line_item)
+    
+    # Get location name
+    location_name = None
+    if data.receive_to_location_id:
+        location = await db.warehouses.find_one({"id": data.receive_to_location_id})
+        if not location:
+            truck = await db.trucks.find_one({"id": data.receive_to_location_id})
+            location = truck
+        location_name = location["name"] if location else None
+    
+    po = PurchaseOrder(
+        vendor_id=data.vendor_id,
+        vendor_name=vendor["name"],
+        line_items=[li.dict() for li in line_items],
+        subtotal=subtotal,
+        total=subtotal,  # Tax and shipping can be added later
+        expected_date=data.expected_date,
+        receive_to_location_id=data.receive_to_location_id,
+        receive_to_location_name=location_name,
+        job_id=data.job_id,
+        notes=sanitize_string(data.notes, 2000) if data.notes else None,
+    )
+    await db.purchase_orders.insert_one(po.dict())
+    return po
+
+@api_router.put("/purchase-orders/{po_id}/status")
+async def update_po_status(po_id: str, status: str):
+    """Update purchase order status"""
+    po = await db.purchase_orders.find_one({"$or": [{"id": po_id}, {"po_number": po_id}]})
+    if not po:
+        raise HTTPException(status_code=404, detail="Purchase order not found")
+    
+    update_data = {
+        "status": status,
+        "status_changed_at": datetime.utcnow(),
+        "updated_at": datetime.utcnow()
+    }
+    
+    if status == "submitted":
+        update_data["order_date"] = datetime.utcnow().strftime("%Y-%m-%d")
+    elif status == "received":
+        update_data["received_date"] = datetime.utcnow().strftime("%Y-%m-%d")
+    
+    await db.purchase_orders.update_one({"id": po["id"]}, {"$set": update_data})
+    return {"message": f"PO status updated to {status}"}
+
+# ==================== INVOICES API (RFC-002 Section 4.6.1) ====================
+
+@api_router.get("/invoices", response_model=List[Invoice])
+async def get_invoices(
+    status: Optional[str] = None,
+    customer_id: Optional[str] = None,
+    job_id: Optional[str] = None,
+    limit: int = Query(default=100, le=500)
+):
+    """Get all invoices"""
+    query = {}
+    if status:
+        query["status"] = status
+    if customer_id:
+        query["customer_id"] = customer_id
+    if job_id:
+        query["job_id"] = job_id
+    
+    invoices = await db.invoices.find(query).sort("created_at", -1).limit(limit).to_list(limit)
+    return [Invoice(**inv) for inv in invoices]
+
+@api_router.get("/invoices/{invoice_id}", response_model=Invoice)
+async def get_invoice(invoice_id: str):
+    """Get a specific invoice"""
+    invoice = await db.invoices.find_one({"$or": [{"id": invoice_id}, {"invoice_number": invoice_id}]})
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    return Invoice(**invoice)
+
+@api_router.post("/invoices", response_model=Invoice)
+async def create_invoice(data: InvoiceCreate):
+    """Create a new invoice"""
+    # Build line items
+    line_items = []
+    labor_total = parts_total = trip_total = misc_total = 0
+    
+    for item_data in data.line_items:
+        line_item = InvoiceLineItem(
+            line_type=item_data.get("line_type", "parts"),
+            description=sanitize_string(item_data.get("description", ""), 200),
+            sku=item_data.get("sku"),
+            quantity=item_data.get("quantity", 1),
+            unit=item_data.get("unit", "each"),
+            unit_price=item_data.get("unit_price", 0),
+            cost=item_data.get("cost", 0),
+        )
+        line_item.extended_price = line_item.quantity * line_item.unit_price
+        
+        if line_item.line_type == "labor":
+            labor_total += line_item.extended_price
+        elif line_item.line_type == "parts":
+            parts_total += line_item.extended_price
+        elif line_item.line_type == "trip":
+            trip_total += line_item.extended_price
+        else:
+            misc_total += line_item.extended_price
+        
+        line_items.append(line_item)
+    
+    subtotal = labor_total + parts_total + trip_total + misc_total
+    tax_amount = subtotal * (data.tax_rate / 100)
+    total = subtotal + tax_amount
+    
+    # Get job info
+    job_number = None
+    if data.job_id:
+        job = await db.jobs.find_one({"id": data.job_id})
+        job_number = job["job_number"] if job else None
+    
+    invoice = Invoice(
+        job_id=data.job_id,
+        job_number=job_number,
+        customer_id=data.customer_id,
+        customer_name=sanitize_string(data.customer_name, 200),
+        customer_email=sanitize_string(data.customer_email, 255) if data.customer_email else None,
+        billing_address=sanitize_string(data.billing_address, 500) if data.billing_address else None,
+        line_items=[li.dict() for li in line_items],
+        labor_total=labor_total,
+        parts_total=parts_total,
+        trip_total=trip_total,
+        misc_total=misc_total,
+        subtotal=subtotal,
+        tax_rate=data.tax_rate,
+        tax_amount=tax_amount,
+        total=total,
+        balance_due=total,
+        due_date=data.due_date,
+        notes=sanitize_string(data.notes, 2000) if data.notes else None,
+    )
+    await db.invoices.insert_one(invoice.dict())
+    return invoice
+
+@api_router.put("/invoices/{invoice_id}/status")
+async def update_invoice_status(invoice_id: str, status: str):
+    """Update invoice status"""
+    invoice = await db.invoices.find_one({"$or": [{"id": invoice_id}, {"invoice_number": invoice_id}]})
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    
+    update_data = {
+        "status": status,
+        "status_changed_at": datetime.utcnow(),
+        "updated_at": datetime.utcnow()
+    }
+    
+    if status == "paid":
+        update_data["paid_date"] = datetime.utcnow().strftime("%Y-%m-%d")
+        update_data["balance_due"] = 0
+        update_data["amount_paid"] = invoice["total"]
+    
+    await db.invoices.update_one({"id": invoice["id"]}, {"$set": update_data})
+    return {"message": f"Invoice status updated to {status}"}
+
+# ==================== PAYMENTS API (RFC-002 Section 4.6.1) ====================
+
+@api_router.get("/payments")
+async def get_payments(
+    invoice_id: Optional[str] = None,
+    customer_id: Optional[str] = None,
+    limit: int = Query(default=100, le=500)
+):
+    """Get all payments"""
+    query = {}
+    if invoice_id:
+        query["invoice_id"] = invoice_id
+    if customer_id:
+        query["customer_id"] = customer_id
+    
+    payments = await db.payments.find(query).sort("created_at", -1).limit(limit).to_list(limit)
+    for p in payments:
+        p.pop("_id", None)
+    return payments
+
+@api_router.post("/payments", response_model=Payment)
+async def create_payment(data: PaymentCreate):
+    """Record a payment"""
+    invoice = await db.invoices.find_one({"id": data.invoice_id})
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    
+    payment = Payment(
+        invoice_id=data.invoice_id,
+        invoice_number=invoice.get("invoice_number"),
+        customer_id=invoice.get("customer_id"),
+        customer_name=invoice.get("customer_name"),
+        payment_method=data.payment_method,
+        amount=data.amount,
+        card_last_four=data.card_last_four,
+        check_number=data.check_number,
+        financing_provider=data.financing_provider,
+        notes=sanitize_string(data.notes, 500) if data.notes else None,
+    )
+    await db.payments.insert_one(payment.dict())
+    
+    # Update invoice
+    new_amount_paid = invoice.get("amount_paid", 0) + data.amount
+    new_balance = invoice.get("total", 0) - new_amount_paid
+    new_status = "paid" if new_balance <= 0 else "partially_paid"
+    
+    await db.invoices.update_one(
+        {"id": data.invoice_id},
+        {"$set": {
+            "amount_paid": new_amount_paid,
+            "balance_due": max(0, new_balance),
+            "status": new_status,
+            "status_changed_at": datetime.utcnow(),
+            "paid_date": datetime.utcnow().strftime("%Y-%m-%d") if new_status == "paid" else invoice.get("paid_date"),
+            "updated_at": datetime.utcnow()
+        }}
+    )
+    
+    return payment
+
+# ==================== CUSTOMER EQUIPMENT API (RFC-002 Section 4.7.4) ====================
+
+@api_router.get("/customer-equipment")
+async def get_customer_equipment(
+    customer_id: Optional[str] = None,
+    warranty_expiring: bool = False,
+    limit: int = Query(default=100, le=500)
+):
+    """Get customer equipment records"""
+    query = {"is_active": True}
+    if customer_id:
+        query["customer_id"] = customer_id
+    if warranty_expiring:
+        # Equipment with warranty expiring in next 30 days
+        thirty_days = (datetime.utcnow() + timedelta(days=30)).strftime("%Y-%m-%d")
+        today = datetime.utcnow().strftime("%Y-%m-%d")
+        query["warranty_end_date"] = {"$gte": today, "$lte": thirty_days}
+    
+    equipment = await db.customer_equipment.find(query).sort("created_at", -1).limit(limit).to_list(limit)
+    for e in equipment:
+        e.pop("_id", None)
+        # Update warranty status
+        if e.get("warranty_end_date"):
+            today = datetime.utcnow().strftime("%Y-%m-%d")
+            thirty_days = (datetime.utcnow() + timedelta(days=30)).strftime("%Y-%m-%d")
+            e["is_in_warranty"] = e["warranty_end_date"] >= today
+            e["warranty_expiring_soon"] = today <= e["warranty_end_date"] <= thirty_days
+    
+    return equipment
+
+@api_router.get("/customer-equipment/{equipment_id}")
+async def get_equipment(equipment_id: str):
+    """Get a specific equipment record"""
+    equipment = await db.customer_equipment.find_one({"id": equipment_id})
+    if not equipment:
+        raise HTTPException(status_code=404, detail="Equipment not found")
+    equipment.pop("_id", None)
+    return equipment
+
+@api_router.post("/customer-equipment")
+async def create_customer_equipment(data: CustomerEquipmentCreate):
+    """Create a customer equipment record"""
+    # Get customer name
+    customer_name = None
+    customer = await db.customers.find_one({"id": data.customer_id})
+    if customer:
+        customer_name = customer.get("name")
+    
+    equipment = CustomerEquipment(
+        customer_id=data.customer_id,
+        customer_name=customer_name,
+        site_address=sanitize_string(data.site_address, 500) if data.site_address else None,
+        equipment_type=sanitize_string(data.equipment_type, 100),
+        manufacturer=sanitize_string(data.manufacturer, 100) if data.manufacturer else None,
+        model=sanitize_string(data.model, 100) if data.model else None,
+        serial_number=sanitize_string(data.serial_number, 100) if data.serial_number else None,
+        location_in_building=sanitize_string(data.location_in_building, 100) if data.location_in_building else None,
+        install_date=data.install_date,
+        warranty_start_date=data.warranty_start_date,
+        warranty_end_date=data.warranty_end_date,
+        warranty_type=data.warranty_type,
+        warranty_terms=sanitize_string(data.warranty_terms, 1000) if data.warranty_terms else None,
+        notes=sanitize_string(data.notes, 2000) if data.notes else None,
+    )
+    
+    # Set warranty flags
+    if equipment.warranty_end_date:
+        today = datetime.utcnow().strftime("%Y-%m-%d")
+        thirty_days = (datetime.utcnow() + timedelta(days=30)).strftime("%Y-%m-%d")
+        equipment.is_in_warranty = equipment.warranty_end_date >= today
+        equipment.warranty_expiring_soon = today <= equipment.warranty_end_date <= thirty_days
+    
+    await db.customer_equipment.insert_one(equipment.dict())
+    return equipment
+
 # ==================== SEED DATA ====================
 
 @api_router.post("/seed")
