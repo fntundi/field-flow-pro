@@ -3,6 +3,7 @@ import MetricCard from "@/components/MetricCard";
 import StatusBadge from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Link } from "react-router-dom";
 import {
   DollarSign, TrendingUp, Target, Award, Search, Phone, ArrowRight, Users,
   BarChart3, Calendar, FileText, Percent
@@ -47,12 +48,12 @@ const monthlyTrend = [
 ];
 
 const recentDeals = [
-  { id: "EST-220", customer: "Metro Office Park", type: "Commercial Install", value: "$18,500", stage: "Quote Sent", rep: "Rachel Kim", daysInStage: 3, tier: "Best" },
-  { id: "EST-219", customer: "Sarah Mitchell", type: "Residential Repair", value: "$4,200", stage: "Won", rep: "Tom Parker", daysInStage: 0, tier: "Better" },
-  { id: "EST-218", customer: "TechHub Offices", type: "Commercial Repair", value: "$8,900", stage: "Negotiation", rep: "Sarah Lee", daysInStage: 5, tier: "Good" },
-  { id: "EST-217", customer: "James Rivera", type: "Residential Install", value: "$12,800", stage: "Site Visit", rep: "Rachel Kim", daysInStage: 2, tier: "Best" },
-  { id: "EST-216", customer: "Linda Hayes", type: "Residential Install", value: "$6,400", stage: "Won", rep: "Jake Morris", daysInStage: 0, tier: "Better" },
-  { id: "EST-215", customer: "Acme Corp", type: "Commercial Maintenance", value: "$3,200", stage: "Contacted", rep: "Tom Parker", daysInStage: 1, tier: "Good" },
+  { id: "EST-220", customer: "Metro Office Park", type: "Commercial Install", value: "$18,500", stage: "Quote Sent", rep: "Rachel Kim", daysInStage: 3, tier: "Best", jobId: "JOB-1039" },
+  { id: "EST-219", customer: "Sarah Mitchell", type: "Residential Repair", value: "$4,200", stage: "Won", rep: "Tom Parker", daysInStage: 0, tier: "Better", jobId: "JOB-1042" },
+  { id: "EST-218", customer: "TechHub Offices", type: "Commercial Repair", value: "$8,900", stage: "Negotiation", rep: "Sarah Lee", daysInStage: 5, tier: "Good", jobId: "JOB-1036" },
+  { id: "EST-217", customer: "James Rivera", type: "Residential Install", value: "$12,800", stage: "Site Visit", rep: "Rachel Kim", daysInStage: 2, tier: "Best", jobId: "JOB-1040" },
+  { id: "EST-216", customer: "Linda Hayes", type: "Residential Install", value: "$6,400", stage: "Won", rep: "Jake Morris", daysInStage: 0, tier: "Better", jobId: "JOB-1037" },
+  { id: "EST-215", customer: "Acme Corp", type: "Commercial Maintenance", value: "$3,200", stage: "Contacted", rep: "Tom Parker", daysInStage: 1, tier: "Good", jobId: "JOB-1041" },
 ];
 
 const sourceData = [
@@ -74,10 +75,7 @@ const Sales = () => {
   const [search, setSearch] = useState("");
 
   const filteredDeals = recentDeals.filter(
-    (d) =>
-      d.customer.toLowerCase().includes(search.toLowerCase()) ||
-      d.id.toLowerCase().includes(search.toLowerCase()) ||
-      d.rep.toLowerCase().includes(search.toLowerCase())
+    (d) => d.customer.toLowerCase().includes(search.toLowerCase()) || d.id.toLowerCase().includes(search.toLowerCase()) || d.rep.toLowerCase().includes(search.toLowerCase())
   );
 
   const totalPipeline = pipelineData.reduce((sum, s) => sum + s.value, 0);
@@ -96,12 +94,11 @@ const Sales = () => {
         </Button>
       </div>
 
-      {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard title="Pipeline Value" value={`$${(totalPipeline / 1000).toFixed(0)}k`} change="+18% vs last month" changeType="positive" icon={DollarSign} index={0} />
+        <MetricCard title="Pipeline Value" value={`$${(totalPipeline / 1000).toFixed(0)}k`} change="+18% vs last month" changeType="positive" icon={DollarSign} index={0} href="/sales" />
         <MetricCard title="Win Rate" value="58%" change="+5% improvement" changeType="positive" icon={Target} index={1} />
         <MetricCard title="Avg Deal Size" value={`$${(avgDealSize / 1000).toFixed(1)}k`} change="+$800 vs avg" changeType="positive" icon={TrendingUp} index={2} />
-        <MetricCard title="Deals This Month" value="12" change="6 won, 2 lost" changeType="neutral" icon={Award} index={3} />
+        <MetricCard title="Deals This Month" value="12" change="6 won, 2 lost" changeType="neutral" icon={Award} index={3} href="/estimates" />
       </div>
 
       {/* Pipeline Funnel + Revenue Trend */}
@@ -116,13 +113,7 @@ const Sales = () => {
                 <div key={stage.stage} className="flex items-center gap-3">
                   <span className="text-xs text-muted-foreground w-20 text-right">{stage.stage}</span>
                   <div className="flex-1 h-7 bg-muted rounded-md overflow-hidden relative">
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${pct}%` }}
-                      transition={{ delay: 0.4 + i * 0.08, duration: 0.5 }}
-                      className="h-full rounded-md flex items-center justify-end px-2"
-                      style={{ background: CHART_COLORS[i % CHART_COLORS.length] }}
-                    >
+                    <motion.div initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ delay: 0.4 + i * 0.08, duration: 0.5 }} className="h-full rounded-md flex items-center justify-end px-2" style={{ background: CHART_COLORS[i % CHART_COLORS.length] }}>
                       <span className="text-xs font-semibold text-white drop-shadow">{stage.count}</span>
                     </motion.div>
                   </div>
@@ -178,12 +169,7 @@ const Sales = () => {
                     </div>
                   </div>
                   <div className="h-2 bg-muted rounded-full overflow-hidden">
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${Math.min(quotaPct, 100)}%` }}
-                      transition={{ delay: 0.6, duration: 0.5 }}
-                      className={`h-full rounded-full ${quotaPct >= 100 ? "bg-success" : quotaPct >= 75 ? "bg-accent" : "bg-warning"}`}
-                    />
+                    <motion.div initial={{ width: 0 }} animate={{ width: `${Math.min(quotaPct, 100)}%` }} transition={{ delay: 0.6, duration: 0.5 }} className={`h-full rounded-full ${quotaPct >= 100 ? "bg-success" : quotaPct >= 75 ? "bg-accent" : "bg-warning"}`} />
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">{quotaPct}% of quota</p>
                 </div>
@@ -197,9 +183,7 @@ const Sales = () => {
           <ResponsiveContainer width="100%" height={180}>
             <PieChart>
               <Pie data={sourceData} cx="50%" cy="50%" innerRadius={50} outerRadius={75} paddingAngle={3} dataKey="value">
-                {sourceData.map((_, i) => (
-                  <Cell key={i} fill={CHART_COLORS[i]} />
-                ))}
+                {sourceData.map((_, i) => (<Cell key={i} fill={CHART_COLORS[i]} />))}
               </Pie>
               <Tooltip contentStyle={{ background: "hsl(0, 0%, 100%)", border: "1px solid hsl(214, 20%, 90%)", borderRadius: "8px", fontSize: "12px" }} />
             </PieChart>
@@ -232,29 +216,17 @@ const Sales = () => {
         </div>
         <table className="data-table">
           <thead>
-            <tr>
-              <th>Estimate</th>
-              <th>Customer</th>
-              <th>Type</th>
-              <th>Value</th>
-              <th>Tier</th>
-              <th>Sales Rep</th>
-              <th>Days in Stage</th>
-              <th>Stage</th>
-            </tr>
+            <tr><th>Estimate</th><th>Customer</th><th>Type</th><th>Value</th><th>Tier</th><th>Sales Rep</th><th>Days in Stage</th><th>Stage</th></tr>
           </thead>
           <tbody>
             {filteredDeals.map((deal) => (
               <tr key={deal.id} className="cursor-pointer">
-                <td className="font-mono text-xs font-medium">{deal.id}</td>
+                <td><Link to={`/jobs/${deal.jobId}`} className="font-mono text-xs font-medium text-accent hover:underline">{deal.id}</Link></td>
                 <td className="font-medium text-foreground">{deal.customer}</td>
                 <td className="text-muted-foreground text-xs">{deal.type}</td>
                 <td className="font-semibold text-foreground">{deal.value}</td>
                 <td>
-                  <span className={`status-badge ${
-                    deal.tier === "Best" ? "status-complete" :
-                    deal.tier === "Better" ? "status-open" : "status-progress"
-                  }`}>{deal.tier}</span>
+                  <span className={`status-badge ${deal.tier === "Best" ? "status-complete" : deal.tier === "Better" ? "status-open" : "status-progress"}`}>{deal.tier}</span>
                 </td>
                 <td className="text-muted-foreground">{deal.rep}</td>
                 <td>

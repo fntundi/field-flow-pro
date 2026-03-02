@@ -2,6 +2,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import StatusBadge from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Link } from "react-router-dom";
 import { Plus, Search, Phone, Mail, MapPin, ChevronDown, ChevronRight, Building2, Briefcase, Home } from "lucide-react";
 import { useState } from "react";
 
@@ -116,7 +117,6 @@ const Customers = () => {
         </Button>
       </div>
 
-      {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {[
           { label: "Total Customers", value: "284", icon: "👥" },
@@ -136,7 +136,6 @@ const Customers = () => {
         ))}
       </div>
 
-      {/* Search */}
       <div className="flex items-center gap-3">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -144,16 +143,12 @@ const Customers = () => {
         </div>
       </div>
 
-      {/* Customer List with Sites Drill-down */}
       <div className="space-y-3">
         {filtered.map((c) => {
           const isExpanded = expandedCustomer === c.id;
           return (
             <motion.div key={c.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="metric-card !p-0 overflow-hidden">
-              <div
-                className="flex items-center gap-4 px-5 py-4 cursor-pointer hover:bg-muted/30 transition-colors"
-                onClick={() => setExpandedCustomer(isExpanded ? null : c.id)}
-              >
+              <div className="flex items-center gap-4 px-5 py-4 cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => setExpandedCustomer(isExpanded ? null : c.id)}>
                 <button className="text-muted-foreground">
                   {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                 </button>
@@ -172,10 +167,10 @@ const Customers = () => {
                 <div className="flex items-center gap-4 text-right">
                   <div className="hidden md:block">
                     <p className="text-sm font-semibold text-foreground">{c.totalSpent}</p>
-                    <p className="text-xs text-muted-foreground">{c.totalJobs} jobs</p>
+                    <Link to={`/jobs?customer=${c.id}`} className="text-xs text-accent hover:underline">{c.totalJobs} jobs</Link>
                   </div>
                   {c.agreement ? (
-                    <span className="status-badge status-complete">{c.agreement}</span>
+                    <Link to="/agreements" className="status-badge status-complete hover:opacity-80">{c.agreement}</Link>
                   ) : (
                     <span className="text-xs text-muted-foreground">No agreement</span>
                   )}
@@ -184,40 +179,26 @@ const Customers = () => {
 
               <AnimatePresence>
                 {isExpanded && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: "auto", opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.2 }}
-                    className="overflow-hidden"
-                  >
+                  <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
                     <div className="border-t border-border bg-muted/20 px-5 py-3">
                       <div className="flex items-center justify-between mb-3">
                         <h4 className="text-xs font-semibold text-foreground uppercase tracking-wider">Sites ({c.sites.length})</h4>
-                        <Button variant="ghost" size="sm" className="h-7 text-xs">
-                          <Plus className="w-3 h-3 mr-1" /> Add Site
-                        </Button>
+                        <Button variant="ghost" size="sm" className="h-7 text-xs"><Plus className="w-3 h-3 mr-1" /> Add Site</Button>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {c.sites.map((site) => (
                           <div key={site.id} className="bg-card rounded-lg border border-border p-4">
                             <div className="flex items-start justify-between mb-2">
                               <div className="flex items-center gap-2">
-                                {site.type === "commercial" ? (
-                                  <Building2 className="w-4 h-4 text-info" />
-                                ) : (
-                                  <Home className="w-4 h-4 text-success" />
-                                )}
+                                {site.type === "commercial" ? <Building2 className="w-4 h-4 text-info" /> : <Home className="w-4 h-4 text-success" />}
                                 <span className="text-sm font-medium text-foreground">{site.name}</span>
                                 <span className="font-mono text-xs text-muted-foreground">{site.id}</span>
                               </div>
                               {site.activeJobs > 0 && (
-                                <span className="status-badge status-progress">{site.activeJobs} active</span>
+                                <Link to={`/jobs?customer=${c.id}`} className="status-badge status-progress hover:opacity-80">{site.activeJobs} active</Link>
                               )}
                             </div>
-                            <p className="text-xs text-muted-foreground flex items-center gap-1 mb-2">
-                              <MapPin className="w-3 h-3" />{site.address}
-                            </p>
+                            <p className="text-xs text-muted-foreground flex items-center gap-1 mb-2"><MapPin className="w-3 h-3" />{site.address}</p>
                             <div className="flex flex-wrap gap-1 mb-2">
                               {site.equipment.map((eq) => (
                                 <span key={eq} className="text-xs bg-muted px-2 py-0.5 rounded text-muted-foreground">{eq}</span>
