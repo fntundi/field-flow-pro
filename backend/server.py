@@ -239,6 +239,162 @@ async def health_check():
         db_status = "disconnected"
     return {"status": "healthy", "database": db_status, "timestamp": datetime.utcnow().isoformat()}
 
+# ==================== AUTHENTICATION API ====================
+
+@api_router.post("/auth/register", response_model=TokenResponse)
+async def register(data: UserRegister):
+    """Register a new user with email/password"""
+    # Check if user exists
+    existing = await db.auth_users.find_one({"email": data.email.lower()})
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    # Create user
+    user = UserAuth(
+        email=data.email.lower(),
+        name=sanitize_string(data.name, 200),
+        password_hash=hash_password(data.password),
+        role=data.role,
+        auth_provider="local",
+    )
+    await db.auth_users.insert_one(user.dict())
+    
+    # Create access token
+    token = create_access_token({"sub": user.id, "email": user.email, "role": user.role})
+    
+    return TokenResponse(
+        access_token=token,
+        user={
+            "id": user.id,
+            "email": user.email,
+            "name": user.name,
+            "role": user.role,
+            "avatar_url": user.avatar_url,
+        }
+    )
+
+@api_router.post("/auth/login", response_model=TokenResponse)
+async def login(data: UserLogin):
+    """Login with email/password"""
+    user = await db.auth_users.find_one({"email": data.email.lower()})
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    if not user.get("password_hash") or not verify_password(data.password, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    if not user.get("is_active", True):
+        raise HTTPException(status_code=401, detail="Account is disabled")
+    
+    # Update last login
+    await db.auth_users.update_one(
+        {"id": user["id"]},
+        {"$set": {"last_login": datetime.utcnow()}}
+    )
+    
+    # Create access token
+    token = create_access_token({"sub": user["id"], "email": user["email"], "role": user["role"]})
+    
+    return TokenResponse(
+        access_token=token,
+        user={
+            "id": user["id"],
+            "email": user["email"],
+            "name": user["name"],
+            "role": user["role"],
+            "avatar_url": user.get("avatar_url"),
+        }
+    )
+
+@api_router.get("/auth/me")
+async def get_me(user: dict = Depends(require_auth)):
+    """Get current user profile"""
+    return {
+        "id": user["id"],
+        "email": user["email"],
+        "name": user["name"],
+        "role": user["role"],
+        "avatar_url": user.get("avatar_url"),
+        "phone": user.get("phone"),
+        "auth_provider": user.get("auth_provider", "local"),
+    }
+
+@api_router.put("/auth/me")
+async def update_me(data: dict, user: dict = Depends(require_auth)):
+    """Update current user profile"""
+    update_data = {}
+    if "name" in data:
+        update_data["name"] = sanitize_string(data["name"], 200)
+    if "phone" in data:
+        update_data["phone"] = sanitize_string(data["phone"], 20)
+    if "avatar_url" in data:
+        update_data["avatar_url"] = data["avatar_url"]
+    
+    update_data["updated_at"] = datetime.utcnow()
+    
+    await db.auth_users.update_one({"id": user["id"]}, {"$set": update_data})
+    
+    updated = await db.auth_users.find_one({"id": user["id"]})
+    updated.pop("_id", None)
+    updated.pop("password_hash", None)
+    
+    return updated
+
+@api_router.post("/auth/change-password")
+async def change_password(data: dict, user: dict = Depends(require_auth)):
+    """Change password for authenticated user"""
+    current_password = data.get("current_password")
+    new_password = data.get("new_password")
+    
+    if not current_password or not new_password:
+        raise HTTPException(status_code=400, detail="Current and new password required")
+    
+    # Get user with password hash
+    db_user = await db.auth_users.find_one({"id": user["id"]})
+    if not db_user or not verify_password(current_password, db_user.get("password_hash", "")):
+        raise HTTPException(status_code=401, detail="Current password is incorrect")
+    
+    # Update password
+    await db.auth_users.update_one(
+        {"id": user["id"]},
+        {"$set": {
+            "password_hash": hash_password(new_password),
+            "updated_at": datetime.utcnow()
+        }}
+    )
+    
+    return {"message": "Password changed successfully"}
+
+@api_router.get("/auth/users")
+async def get_users(user: dict = Depends(require_auth)):
+    """Get all users (admin only)"""
+    if user["role"] not in ["admin", "owner", "manager"]:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    users = await db.auth_users.find().to_list(500)
+    for u in users:
+        u.pop("_id", None)
+        u.pop("password_hash", None)
+    
+    return users
+
+@api_router.put("/auth/users/{user_id}/role")
+async def update_user_role(user_id: str, data: dict, user: dict = Depends(require_auth)):
+    """Update user role (admin only)"""
+    if user["role"] not in ["admin", "owner"]:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    new_role = data.get("role")
+    if not new_role:
+        raise HTTPException(status_code=400, detail="Role required")
+    
+    await db.auth_users.update_one(
+        {"id": user_id},
+        {"$set": {"role": new_role, "updated_at": datetime.utcnow()}}
+    )
+    
+    return {"message": f"User role updated to {new_role}"}
+
 # ==================== DEFAULT DATA INITIALIZATION ====================
 
 async def ensure_default_board_config():
