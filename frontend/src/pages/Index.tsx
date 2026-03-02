@@ -76,6 +76,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [aiEnabled, setAiEnabled] = useState(false);
   const [demoMode, setDemoMode] = useState(true);
+  const [mobileView, setMobileView] = useState(false);
   
   // Technician time tracking state
   const [activeShift, setActiveShift] = useState<ShiftSession | null>(null);
