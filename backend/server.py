@@ -7364,9 +7364,7 @@ async def seed_database():
         "sample_appointment_token": appointment_tokens[0] if appointment_tokens else None,
     }
 
-# Include the router in the main app
-app.include_router(api_router)
-
+# CORS middleware - include_router moved to after all routes are defined
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
@@ -8006,6 +8004,9 @@ async def get_quickbooks_sync_logs(user: dict = Depends(require_auth), limit: in
     ).sort("started_at", -1).limit(limit).to_list(limit)
     
     return logs
+
+# Include the router in the main app AFTER all routes are defined
+app.include_router(api_router)
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
