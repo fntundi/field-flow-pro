@@ -803,6 +803,515 @@ async def update_appointment_status(appt_id: str, status: str):
     )
     return {"message": "Appointment status updated"}
 
+# ==================== TIME TRACKING API ====================
+
+def calculate_distance_miles(loc1: GeoLocation, loc2: GeoLocation) -> float:
+    """Calculate distance between two points using Haversine formula"""
+    R = 3959  # Earth's radius in miles
+    
+    lat1, lon1 = math.radians(loc1.latitude), math.radians(loc1.longitude)
+    lat2, lon2 = math.radians(loc2.latitude), math.radians(loc2.longitude)
+    
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    
+    a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2
+    c = 2 * math.asin(math.sqrt(a))
+    
+    return R * c
+
+def estimate_travel_time(distance_miles: float, route_count: int = 3) -> float:
+    """
+    Estimate travel time based on distance.
+    Simulates averaging top 3 routes by adding variance.
+    Assumes average speed of 25-35 mph for urban/suburban driving.
+    """
+    # Base estimate at 30 mph average
+    base_minutes = (distance_miles / 30) * 60
+    
+    # Simulate 3 route options with variance
+    routes = [
+        base_minutes * 0.9,   # Fastest route
+        base_minutes * 1.0,   # Average route
+        base_minutes * 1.15,  # Slowest route with traffic
+    ]
+    
+    # Return average of top 3 routes
+    return sum(routes[:route_count]) / route_count
+
+@api_router.post("/time-tracking/shift/start")
+async def start_shift(technician_id: str, location: Optional[GeoLocation] = None):
+    """Clock in for shift - captures technician's starting location"""
+    if not validate_uuid(technician_id):
+        raise HTTPException(status_code=400, detail="Invalid technician ID")
+    
+    tech = await db.technicians.find_one({"id": technician_id})
+    if not tech:
+        raise HTTPException(status_code=404, detail="Technician not found")
+    
+    # Check for existing active shift
+    existing = await db.shift_sessions.find_one({
+        "technician_id": technician_id,
+        "status": "active"
+    })
+    if existing:
+        raise HTTPException(status_code=400, detail="Active shift already exists. End current shift first.")
+    
+    session = ShiftSession(
+        technician_id=technician_id,
+        shift_start=datetime.utcnow(),
+        shift_start_location=location,
+        status="active"
+    )
+    
+    await db.shift_sessions.insert_one(session.dict())
+    
+    # Update technician status
+    await db.technicians.update_one(
+        {"id": technician_id},
+        {"$set": {"status": "available", "status_label": "On Shift", "updated_at": datetime.utcnow()}}
+    )
+    
+    # Log time entry
+    entry = TimeEntry(
+        technician_id=technician_id,
+        entry_type="shift_start",
+        location=location
+    )
+    await db.time_entries.insert_one(entry.dict())
+    
+    return {
+        "message": "Shift started",
+        "session_id": session.id,
+        "shift_start": session.shift_start.isoformat(),
+        "location_captured": location is not None
+    }
+
+@api_router.post("/time-tracking/shift/end")
+async def end_shift(technician_id: str, location: Optional[GeoLocation] = None):
+    """Clock out from shift"""
+    if not validate_uuid(technician_id):
+        raise HTTPException(status_code=400, detail="Invalid technician ID")
+    
+    session = await db.shift_sessions.find_one({
+        "technician_id": technician_id,
+        "status": "active"
+    })
+    if not session:
+        raise HTTPException(status_code=400, detail="No active shift found")
+    
+    shift_start = session["shift_start"]
+    if isinstance(shift_start, str):
+        shift_start = datetime.fromisoformat(shift_start.replace("Z", "+00:00"))
+    
+    shift_end = datetime.utcnow()
+    total_minutes = (shift_end - shift_start).total_seconds() / 60
+    
+    # Count completed jobs in this shift
+    jobs_completed = await db.job_time_entries.count_documents({
+        "shift_session_id": session["id"],
+        "status": "completed"
+    })
+    
+    await db.shift_sessions.update_one(
+        {"id": session["id"]},
+        {"$set": {
+            "shift_end": shift_end,
+            "shift_end_location": location.dict() if location else None,
+            "total_shift_minutes": total_minutes,
+            "jobs_completed": jobs_completed,
+            "status": "completed"
+        }}
+    )
+    
+    # Update technician status
+    await db.technicians.update_one(
+        {"id": technician_id},
+        {"$set": {"status": "off_duty", "status_label": "Off Duty", "updated_at": datetime.utcnow()}}
+    )
+    
+    # Log time entry
+    entry = TimeEntry(
+        technician_id=technician_id,
+        entry_type="shift_end",
+        location=location
+    )
+    await db.time_entries.insert_one(entry.dict())
+    
+    return {
+        "message": "Shift ended",
+        "session_id": session["id"],
+        "total_shift_hours": round(total_minutes / 60, 2),
+        "jobs_completed": jobs_completed
+    }
+
+@api_router.get("/time-tracking/shift/active/{technician_id}")
+async def get_active_shift(technician_id: str):
+    """Get active shift for a technician"""
+    if not validate_uuid(technician_id):
+        raise HTTPException(status_code=400, detail="Invalid technician ID")
+    
+    session = await db.shift_sessions.find_one({
+        "technician_id": technician_id,
+        "status": "active"
+    })
+    
+    if not session:
+        return {"active": False, "session": None}
+    
+    return {"active": True, "session": ShiftSession(**session)}
+
+@api_router.post("/time-tracking/job/dispatch")
+async def dispatch_to_job(data: JobTimeEntryCreate):
+    """Dispatch technician to a job - starts travel tracking"""
+    if not validate_uuid(data.technician_id):
+        raise HTTPException(status_code=400, detail="Invalid technician ID")
+    
+    tech = await db.technicians.find_one({"id": data.technician_id})
+    if not tech:
+        raise HTTPException(status_code=404, detail="Technician not found")
+    
+    job = await db.jobs.find_one({"$or": [{"id": data.job_id}, {"job_number": data.job_id}]})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    # Get active shift
+    shift = await db.shift_sessions.find_one({
+        "technician_id": data.technician_id,
+        "status": "active"
+    })
+    
+    # Calculate estimated travel time if we have locations
+    estimated_travel = None
+    estimated_distance = None
+    
+    if data.dispatch_location:
+        # Mock job location based on address (in real app, geocode the address)
+        # For demo, use Dallas area coordinates with slight variation
+        job_lat = 32.7767 + (hash(job["site_address"]) % 100) / 1000
+        job_lon = -96.7970 + (hash(job["site_address"]) % 100) / 1000
+        
+        job_location = GeoLocation(
+            latitude=job_lat,
+            longitude=job_lon,
+            address=f"{job['site_address']}, {job.get('site_city', '')}"
+        )
+        
+        estimated_distance = calculate_distance_miles(data.dispatch_location, job_location)
+        estimated_travel = estimate_travel_time(estimated_distance)
+    
+    entry = JobTimeEntry(
+        technician_id=data.technician_id,
+        job_id=job["id"],
+        job_number=job["job_number"],
+        job_type=job["job_type"],
+        shift_session_id=shift["id"] if shift else None,
+        dispatch_time=datetime.utcnow(),
+        dispatch_location=data.dispatch_location,
+        estimated_travel_minutes=estimated_travel,
+        estimated_route_distance_miles=estimated_distance,
+        status="traveling"
+    )
+    
+    await db.job_time_entries.insert_one(entry.dict())
+    
+    # Update technician status
+    await db.technicians.update_one(
+        {"id": data.technician_id},
+        {"$set": {"status": "en_route", "status_label": f"En Route - {job['job_number']}", "updated_at": datetime.utcnow()}}
+    )
+    
+    return {
+        "message": "Dispatched to job",
+        "entry_id": entry.id,
+        "job_number": job["job_number"],
+        "estimated_travel_minutes": round(estimated_travel, 1) if estimated_travel else None,
+        "estimated_distance_miles": round(estimated_distance, 1) if estimated_distance else None
+    }
+
+@api_router.post("/time-tracking/job/arrive/{entry_id}")
+async def arrive_at_job(entry_id: str, location: Optional[GeoLocation] = None):
+    """Clock in at job site - marks arrival and calculates actual travel time"""
+    if not validate_uuid(entry_id):
+        raise HTTPException(status_code=400, detail="Invalid entry ID")
+    
+    entry = await db.job_time_entries.find_one({"id": entry_id})
+    if not entry:
+        raise HTTPException(status_code=404, detail="Job time entry not found")
+    
+    if entry["status"] != "traveling":
+        raise HTTPException(status_code=400, detail="Invalid status for arrival")
+    
+    arrival_time = datetime.utcnow()
+    dispatch_time = entry["dispatch_time"]
+    if isinstance(dispatch_time, str):
+        dispatch_time = datetime.fromisoformat(dispatch_time.replace("Z", "+00:00"))
+    
+    actual_travel = (arrival_time - dispatch_time).total_seconds() / 60
+    
+    # Calculate travel variance
+    travel_variance = None
+    if entry.get("estimated_travel_minutes"):
+        travel_variance = actual_travel - entry["estimated_travel_minutes"]
+    
+    await db.job_time_entries.update_one(
+        {"id": entry_id},
+        {"$set": {
+            "job_start": arrival_time,
+            "job_start_location": location.dict() if location else None,
+            "actual_travel_minutes": actual_travel,
+            "travel_variance_minutes": travel_variance,
+            "status": "on_site",
+            "updated_at": datetime.utcnow()
+        }}
+    )
+    
+    # Update technician status
+    await db.technicians.update_one(
+        {"id": entry["technician_id"]},
+        {"$set": {"status": "on_job", "status_label": f"On Site - {entry['job_number']}", "updated_at": datetime.utcnow()}}
+    )
+    
+    # Log time entry
+    time_entry = TimeEntry(
+        technician_id=entry["technician_id"],
+        job_id=entry["job_id"],
+        entry_type="job_start",
+        location=location
+    )
+    await db.time_entries.insert_one(time_entry.dict())
+    
+    return {
+        "message": "Arrived at job site",
+        "actual_travel_minutes": round(actual_travel, 1),
+        "estimated_travel_minutes": entry.get("estimated_travel_minutes"),
+        "travel_variance_minutes": round(travel_variance, 1) if travel_variance else None
+    }
+
+@api_router.post("/time-tracking/job/complete/{entry_id}")
+async def complete_job(entry_id: str, location: Optional[GeoLocation] = None, notes: Optional[str] = None):
+    """Clock out from job site - marks completion and calculates job duration"""
+    if not validate_uuid(entry_id):
+        raise HTTPException(status_code=400, detail="Invalid entry ID")
+    
+    entry = await db.job_time_entries.find_one({"id": entry_id})
+    if not entry:
+        raise HTTPException(status_code=404, detail="Job time entry not found")
+    
+    if entry["status"] != "on_site":
+        raise HTTPException(status_code=400, detail="Invalid status for completion")
+    
+    completion_time = datetime.utcnow()
+    job_start = entry["job_start"]
+    if isinstance(job_start, str):
+        job_start = datetime.fromisoformat(job_start.replace("Z", "+00:00"))
+    
+    actual_job_minutes = (completion_time - job_start).total_seconds() / 60
+    
+    await db.job_time_entries.update_one(
+        {"id": entry_id},
+        {"$set": {
+            "job_end": completion_time,
+            "job_end_location": location.dict() if location else None,
+            "actual_job_minutes": actual_job_minutes,
+            "status": "completed",
+            "updated_at": datetime.utcnow()
+        }}
+    )
+    
+    # Update technician status back to available
+    await db.technicians.update_one(
+        {"id": entry["technician_id"]},
+        {"$set": {"status": "available", "status_label": "Available", "updated_at": datetime.utcnow()}}
+    )
+    
+    # Log time entry
+    time_entry = TimeEntry(
+        technician_id=entry["technician_id"],
+        job_id=entry["job_id"],
+        entry_type="job_end",
+        location=location,
+        notes=notes
+    )
+    await db.time_entries.insert_one(time_entry.dict())
+    
+    # Update technician metrics
+    await update_technician_metrics(entry["technician_id"])
+    
+    return {
+        "message": "Job completed",
+        "actual_job_minutes": round(actual_job_minutes, 1),
+        "actual_job_hours": round(actual_job_minutes / 60, 2),
+        "travel_minutes": entry.get("actual_travel_minutes")
+    }
+
+@api_router.get("/time-tracking/job/active/{technician_id}")
+async def get_active_job_entry(technician_id: str):
+    """Get active job time entry for a technician"""
+    if not validate_uuid(technician_id):
+        raise HTTPException(status_code=400, detail="Invalid technician ID")
+    
+    entry = await db.job_time_entries.find_one({
+        "technician_id": technician_id,
+        "status": {"$in": ["traveling", "on_site"]}
+    })
+    
+    if not entry:
+        return {"active": False, "entry": None}
+    
+    return {"active": True, "entry": JobTimeEntry(**entry)}
+
+async def update_technician_metrics(technician_id: str):
+    """Update aggregated metrics for a technician"""
+    tech = await db.technicians.find_one({"id": technician_id})
+    if not tech:
+        return
+    
+    # Get all completed job entries for this technician
+    entries = await db.job_time_entries.find({
+        "technician_id": technician_id,
+        "status": "completed"
+    }).to_list(1000)
+    
+    if not entries:
+        return
+    
+    # Calculate travel metrics
+    travel_times = [e["actual_travel_minutes"] for e in entries if e.get("actual_travel_minutes")]
+    travel_variances = [e["travel_variance_minutes"] for e in entries if e.get("travel_variance_minutes") is not None]
+    
+    avg_travel = sum(travel_times) / len(travel_times) if travel_times else 0
+    total_travel = sum(travel_times)
+    avg_variance = sum(travel_variances) / len(travel_variances) if travel_variances else 0
+    
+    # Calculate job duration metrics by type
+    job_times_by_type = {
+        "residential_repair": [],
+        "commercial_repair": [],
+        "residential_install": [],
+        "commercial_install": [],
+        "maintenance": [],
+        "emergency": [],
+    }
+    
+    for entry in entries:
+        if not entry.get("actual_job_minutes"):
+            continue
+        job_type = (entry.get("job_type") or "").lower()
+        
+        if "residential" in job_type and ("repair" in job_type or "service" in job_type):
+            job_times_by_type["residential_repair"].append(entry["actual_job_minutes"])
+        elif "commercial" in job_type and ("repair" in job_type or "service" in job_type):
+            job_times_by_type["commercial_repair"].append(entry["actual_job_minutes"])
+        elif "residential" in job_type and "install" in job_type:
+            job_times_by_type["residential_install"].append(entry["actual_job_minutes"])
+        elif "commercial" in job_type and "install" in job_type:
+            job_times_by_type["commercial_install"].append(entry["actual_job_minutes"])
+        elif "maintenance" in job_type:
+            job_times_by_type["maintenance"].append(entry["actual_job_minutes"])
+        elif "emergency" in job_type:
+            job_times_by_type["emergency"].append(entry["actual_job_minutes"])
+    
+    # Calculate averages
+    def safe_avg(lst):
+        return sum(lst) / len(lst) if lst else 0
+    
+    # Recent entries (last 30 days)
+    thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+    recent_entries = [e for e in entries if e.get("created_at", datetime.min) > thirty_days_ago]
+    recent_travel = [e["actual_travel_minutes"] for e in recent_entries if e.get("actual_travel_minutes")]
+    recent_variance = [e["travel_variance_minutes"] for e in recent_entries if e.get("travel_variance_minutes") is not None]
+    
+    metrics = TechnicianMetrics(
+        technician_id=technician_id,
+        technician_name=tech["name"],
+        avg_travel_minutes=round(avg_travel, 1),
+        total_travel_minutes=round(total_travel, 1),
+        travel_entries_count=len(travel_times),
+        travel_variance_avg=round(avg_variance, 1),
+        avg_job_minutes_residential_repair=round(safe_avg(job_times_by_type["residential_repair"]), 1),
+        avg_job_minutes_commercial_repair=round(safe_avg(job_times_by_type["commercial_repair"]), 1),
+        avg_job_minutes_residential_install=round(safe_avg(job_times_by_type["residential_install"]), 1),
+        avg_job_minutes_commercial_install=round(safe_avg(job_times_by_type["commercial_install"]), 1),
+        avg_job_minutes_maintenance=round(safe_avg(job_times_by_type["maintenance"]), 1),
+        avg_job_minutes_emergency=round(safe_avg(job_times_by_type["emergency"]), 1),
+        total_jobs_tracked=len(entries),
+        total_job_minutes=round(sum(e.get("actual_job_minutes", 0) for e in entries), 1),
+        recent_avg_travel_minutes=round(safe_avg(recent_travel), 1),
+        recent_travel_variance=round(safe_avg(recent_variance), 1),
+    )
+    
+    # Upsert metrics
+    await db.technician_metrics.update_one(
+        {"technician_id": technician_id},
+        {"$set": metrics.dict()},
+        upsert=True
+    )
+
+@api_router.get("/time-tracking/metrics/{technician_id}", response_model=TechnicianMetrics)
+async def get_technician_metrics(technician_id: str):
+    """Get aggregated time tracking metrics for a technician"""
+    if not validate_uuid(technician_id):
+        raise HTTPException(status_code=400, detail="Invalid technician ID")
+    
+    tech = await db.technicians.find_one({"id": technician_id})
+    if not tech:
+        raise HTTPException(status_code=404, detail="Technician not found")
+    
+    metrics = await db.technician_metrics.find_one({"technician_id": technician_id})
+    
+    if not metrics:
+        # Return empty metrics
+        return TechnicianMetrics(
+            technician_id=technician_id,
+            technician_name=tech["name"]
+        )
+    
+    return TechnicianMetrics(**metrics)
+
+@api_router.post("/time-tracking/route-estimate")
+async def get_route_estimate(origin: GeoLocation, destination: GeoLocation):
+    """Calculate estimated travel time between two points (average of top 3 routes)"""
+    distance = calculate_distance_miles(origin, destination)
+    estimated_minutes = estimate_travel_time(distance, route_count=3)
+    
+    confidence = "high" if distance < 10 else "medium" if distance < 30 else "low"
+    
+    return RouteEstimate(
+        origin=origin,
+        destination=destination,
+        estimated_minutes=round(estimated_minutes, 1),
+        estimated_miles=round(distance, 1),
+        route_count=3,
+        confidence=confidence
+    )
+
+@api_router.get("/time-tracking/history/{technician_id}")
+async def get_time_tracking_history(
+    technician_id: str,
+    days: int = Query(default=30, le=365, ge=1)
+):
+    """Get time tracking history for a technician"""
+    if not validate_uuid(technician_id):
+        raise HTTPException(status_code=400, detail="Invalid technician ID")
+    
+    since = datetime.utcnow() - timedelta(days=days)
+    
+    entries = await db.job_time_entries.find({
+        "technician_id": technician_id,
+        "created_at": {"$gte": since}
+    }).sort("created_at", -1).to_list(100)
+    
+    shifts = await db.shift_sessions.find({
+        "technician_id": technician_id,
+        "created_at": {"$gte": since}
+    }).sort("created_at", -1).to_list(50)
+    
+    return {
+        "job_entries": [JobTimeEntry(**e) for e in entries],
+        "shifts": [ShiftSession(**s) for s in shifts]
+    }
+
 # ==================== SEED DATA ====================
 
 @api_router.post("/seed")
