@@ -2665,8 +2665,8 @@ def get_gemini_client():
         api_key = os.environ.get("EMERGENT_LLM_KEY")
         if api_key:
             try:
-                from emergentintegrations.llm.chat import GeminiChat
-                _gemini_client = GeminiChat(api_key=api_key)
+                from emergentintegrations.llm.chat import LlmChat
+                _gemini_client = LlmChat(api_key=api_key)
             except Exception as e:
                 logger.error(f"Failed to initialize Gemini client: {e}")
     return _gemini_client
