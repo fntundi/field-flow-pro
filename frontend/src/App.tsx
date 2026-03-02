@@ -20,6 +20,7 @@ import MaintenanceSchedules from "@/pages/MaintenanceSchedules";
 import ServiceAgreements from "@/pages/ServiceAgreements";
 import Invoices from "@/pages/Invoices";
 import Inventory from "@/pages/Inventory";
+import Vendors from "@/pages/Vendors";
 import Analytics from "@/pages/Analytics";
 import PlaceholderPage from "@/pages/PlaceholderPage";
 import NotFound from "./pages/NotFound";
