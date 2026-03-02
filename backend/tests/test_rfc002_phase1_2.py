@@ -339,13 +339,13 @@ class TestPCBs:
     
     def test_pcb_status_workflow(self, api_client):
         """PUT /api/pcbs/{id} - updates PCB status through workflow"""
-        # Create test PCB
+        # Create test PCB with valid reason_category
         create_response = api_client.post(f"{BASE_URL}/api/pcbs", json={
             "customer_name": "TEST_PCB Workflow",
             "reason": "Test workflow",
-            "reason_category": "callback"
+            "reason_category": "follow_up"  # Valid category: follow_up, upsell, warranty, complaint, question, other
         })
-        assert create_response.status_code == 200
+        assert create_response.status_code == 200, f"Failed to create PCB: {create_response.text}"
         pcb = create_response.json()
         pcb_id = pcb["id"]
         
