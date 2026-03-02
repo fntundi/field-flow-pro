@@ -50,6 +50,19 @@ from models import (
     ServiceRequest, ServiceRequestCreate,
     # Offline Sync
     OfflineSyncQueue, SyncBatch, ConflictResolution, SyncStatus,
+    # RFC-002 Phase 1 & 2 - Leads, PCBs, Sales
+    Role, RoleCreate, DEFAULT_ROLES,
+    Lead, LeadCreate, LeadUpdate,
+    PCB, PCBCreate, PCBUpdate,
+    Proposal, ProposalCreate, ProposalOption, ProposalLineItem,
+    JobTypeTemplate, JobTypeTemplateCreate, ChecklistItemTemplate,
+    JobChecklist, JobChecklistItem, ChecklistItemEvidence,
+    Vendor, VendorCreate, PurchaseOrder, PurchaseOrderCreate, PurchaseOrderLineItem,
+    WarehouseLocation, LocationInventoryItem, InventoryTransfer,
+    Invoice, InvoiceCreate, InvoiceLineItem,
+    Payment, PaymentCreate,
+    CustomerEquipment, CustomerEquipmentCreate,
+    SystemSettings,
 )
 
 ROOT_DIR = Path(__file__).parent
