@@ -1323,6 +1323,976 @@ async def get_time_tracking_history(
         "shifts": [ShiftSession(**s) for s in shifts]
     }
 
+# ==================== INVENTORY CATEGORIES API ====================
+
+STANDARD_CATEGORIES = [
+    {"name": "Filters", "description": "Air filters, cabin filters", "icon": "filter", "sort_order": 1},
+    {"name": "Refrigerant", "description": "R-410A, R-22, R-32", "icon": "thermometer", "sort_order": 2},
+    {"name": "Copper & Fittings", "description": "Copper tubing, fittings, valves", "icon": "wrench", "sort_order": 3},
+    {"name": "Electrical", "description": "Wiring, breakers, contactors", "icon": "zap", "sort_order": 4},
+    {"name": "Motors", "description": "Blower motors, condenser motors", "icon": "settings", "sort_order": 5},
+    {"name": "Capacitors", "description": "Run capacitors, start capacitors", "icon": "battery", "sort_order": 6},
+    {"name": "Compressors", "description": "Scroll, reciprocating compressors", "icon": "cpu", "sort_order": 7},
+    {"name": "Thermostats", "description": "Smart, programmable thermostats", "icon": "thermometer", "sort_order": 8},
+    {"name": "Tools", "description": "Gauges, meters, hand tools", "icon": "tool", "sort_order": 9},
+    {"name": "Safety Equipment", "description": "PPE, safety gear", "icon": "shield", "sort_order": 10},
+]
+
+async def ensure_standard_categories():
+    """Ensure standard inventory categories exist"""
+    for cat_data in STANDARD_CATEGORIES:
+        existing = await db.inventory_categories.find_one({"name": cat_data["name"], "is_standard": True})
+        if not existing:
+            cat = InventoryCategory(
+                name=cat_data["name"],
+                description=cat_data["description"],
+                icon=cat_data["icon"],
+                sort_order=cat_data["sort_order"],
+                is_standard=True
+            )
+            await db.inventory_categories.insert_one(cat.dict())
+
+@api_router.get("/inventory/categories", response_model=List[InventoryCategory])
+async def get_inventory_categories():
+    """Get all inventory categories"""
+    await ensure_standard_categories()
+    categories = await db.inventory_categories.find().sort("sort_order", 1).to_list(100)
+    return [InventoryCategory(**c) for c in categories]
+
+@api_router.post("/inventory/categories", response_model=InventoryCategory)
+async def create_inventory_category(data: InventoryCategoryCreate):
+    """Create a custom inventory category"""
+    category = InventoryCategory(
+        name=sanitize_string(data.name, 100),
+        description=sanitize_string(data.description, 500) if data.description else None,
+        icon=data.icon,
+        sort_order=data.sort_order,
+        is_standard=False
+    )
+    await db.inventory_categories.insert_one(category.dict())
+    return category
+
+@api_router.delete("/inventory/categories/{category_id}")
+async def delete_inventory_category(category_id: str):
+    """Delete a custom category (cannot delete standard categories)"""
+    if not validate_uuid(category_id):
+        raise HTTPException(status_code=400, detail="Invalid category ID")
+    
+    category = await db.inventory_categories.find_one({"id": category_id})
+    if not category:
+        raise HTTPException(status_code=404, detail="Category not found")
+    if category.get("is_standard"):
+        raise HTTPException(status_code=400, detail="Cannot delete standard categories")
+    
+    await db.inventory_categories.delete_one({"id": category_id})
+    return {"message": "Category deleted"}
+
+# ==================== INVENTORY ITEMS API ====================
+
+@api_router.get("/inventory/items", response_model=List[InventoryItem])
+async def get_inventory_items(
+    category_id: Optional[str] = None,
+    search: Optional[str] = None,
+    active_only: bool = True
+):
+    """Get all inventory items"""
+    query = {}
+    if category_id:
+        query["category_id"] = category_id
+    if active_only:
+        query["is_active"] = True
+    if search:
+        safe_search = sanitize_search_query(search)
+        query["$or"] = [
+            {"name": {"$regex": safe_search, "$options": "i"}},
+            {"sku": {"$regex": safe_search, "$options": "i"}},
+            {"description": {"$regex": safe_search, "$options": "i"}},
+        ]
+    
+    items = await db.inventory_items.find(query).sort("name", 1).to_list(1000)
+    return [InventoryItem(**i) for i in items]
+
+@api_router.get("/inventory/items/{item_id}", response_model=InventoryItem)
+async def get_inventory_item(item_id: str):
+    """Get a specific inventory item"""
+    if not validate_uuid(item_id):
+        raise HTTPException(status_code=400, detail="Invalid item ID")
+    item = await db.inventory_items.find_one({"id": item_id})
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    return InventoryItem(**item)
+
+@api_router.post("/inventory/items", response_model=InventoryItem)
+async def create_inventory_item(data: InventoryItemCreate):
+    """Create a new inventory item"""
+    # Get category name
+    category = await db.inventory_categories.find_one({"id": data.category_id})
+    category_name = category["name"] if category else None
+    
+    item = InventoryItem(
+        sku=sanitize_string(data.sku, 50),
+        name=sanitize_string(data.name, 200),
+        description=sanitize_string(data.description, 500) if data.description else None,
+        category_id=data.category_id,
+        category_name=category_name,
+        unit=data.unit,
+        unit_cost=data.unit_cost,
+        retail_price=data.retail_price,
+        min_stock_threshold=data.min_stock_threshold,
+        is_serialized=data.is_serialized
+    )
+    await db.inventory_items.insert_one(item.dict())
+    return item
+
+@api_router.put("/inventory/items/{item_id}", response_model=InventoryItem)
+async def update_inventory_item(item_id: str, data: InventoryItemUpdate):
+    """Update an inventory item"""
+    if not validate_uuid(item_id):
+        raise HTTPException(status_code=400, detail="Invalid item ID")
+    
+    item = await db.inventory_items.find_one({"id": item_id})
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    
+    update_data = {k: v for k, v in data.dict().items() if v is not None}
+    if "category_id" in update_data:
+        category = await db.inventory_categories.find_one({"id": update_data["category_id"]})
+        update_data["category_name"] = category["name"] if category else None
+    
+    update_data["updated_at"] = datetime.utcnow()
+    await db.inventory_items.update_one({"id": item_id}, {"$set": update_data})
+    
+    updated = await db.inventory_items.find_one({"id": item_id})
+    return InventoryItem(**updated)
+
+# ==================== TRUCKS API ====================
+
+@api_router.get("/trucks", response_model=List[Truck])
+async def get_trucks(status: Optional[str] = None):
+    """Get all trucks"""
+    query = {}
+    if status:
+        query["status"] = status
+    trucks = await db.trucks.find(query).sort("truck_number", 1).to_list(100)
+    return [Truck(**t) for t in trucks]
+
+@api_router.get("/trucks/{truck_id}", response_model=Truck)
+async def get_truck(truck_id: str):
+    """Get a specific truck"""
+    if not validate_uuid(truck_id):
+        raise HTTPException(status_code=400, detail="Invalid truck ID")
+    truck = await db.trucks.find_one({"id": truck_id})
+    if not truck:
+        raise HTTPException(status_code=404, detail="Truck not found")
+    return Truck(**truck)
+
+@api_router.post("/trucks", response_model=Truck)
+async def create_truck(data: TruckCreate):
+    """Create a new truck"""
+    tech_name = None
+    if data.assigned_technician_id:
+        tech = await db.technicians.find_one({"id": data.assigned_technician_id})
+        tech_name = tech["name"] if tech else None
+    
+    truck = Truck(
+        truck_number=sanitize_string(data.truck_number, 50),
+        name=sanitize_string(data.name, 100),
+        vin=data.vin,
+        make=data.make,
+        model=data.model,
+        year=data.year,
+        license_plate=data.license_plate,
+        assigned_technician_id=data.assigned_technician_id,
+        assigned_technician_name=tech_name
+    )
+    await db.trucks.insert_one(truck.dict())
+    
+    # Create empty truck inventory
+    truck_inv = TruckInventory(
+        truck_id=truck.id,
+        truck_name=truck.name,
+        technician_id=data.assigned_technician_id,
+        technician_name=tech_name
+    )
+    await db.truck_inventories.insert_one(truck_inv.dict())
+    
+    return truck
+
+@api_router.put("/trucks/{truck_id}", response_model=Truck)
+async def update_truck(truck_id: str, data: TruckUpdate):
+    """Update a truck"""
+    if not validate_uuid(truck_id):
+        raise HTTPException(status_code=400, detail="Invalid truck ID")
+    
+    truck = await db.trucks.find_one({"id": truck_id})
+    if not truck:
+        raise HTTPException(status_code=404, detail="Truck not found")
+    
+    update_data = {k: v for k, v in data.dict().items() if v is not None}
+    if "assigned_technician_id" in update_data:
+        tech = await db.technicians.find_one({"id": update_data["assigned_technician_id"]})
+        update_data["assigned_technician_name"] = tech["name"] if tech else None
+    
+    update_data["updated_at"] = datetime.utcnow()
+    await db.trucks.update_one({"id": truck_id}, {"$set": update_data})
+    
+    # Update truck inventory assignment too
+    await db.truck_inventories.update_one(
+        {"truck_id": truck_id},
+        {"$set": {
+            "technician_id": update_data.get("assigned_technician_id"),
+            "technician_name": update_data.get("assigned_technician_name"),
+            "updated_at": datetime.utcnow()
+        }}
+    )
+    
+    updated = await db.trucks.find_one({"id": truck_id})
+    return Truck(**updated)
+
+@api_router.get("/trucks/by-technician/{technician_id}", response_model=Truck)
+async def get_truck_by_technician(technician_id: str):
+    """Get truck assigned to a technician"""
+    if not validate_uuid(technician_id):
+        raise HTTPException(status_code=400, detail="Invalid technician ID")
+    truck = await db.trucks.find_one({"assigned_technician_id": technician_id, "status": "active"})
+    if not truck:
+        raise HTTPException(status_code=404, detail="No truck assigned to this technician")
+    return Truck(**truck)
+
+# ==================== TRUCK INVENTORY API ====================
+
+@api_router.get("/truck-inventory/{truck_id}")
+async def get_truck_inventory(truck_id: str):
+    """Get inventory for a specific truck"""
+    if not validate_uuid(truck_id):
+        raise HTTPException(status_code=400, detail="Invalid truck ID")
+    
+    inv = await db.truck_inventories.find_one({"truck_id": truck_id})
+    if not inv:
+        raise HTTPException(status_code=404, detail="Truck inventory not found")
+    
+    return inv
+
+@api_router.put("/truck-inventory/{truck_id}/items")
+async def update_truck_inventory_items(truck_id: str, items: List[dict]):
+    """Update items in truck inventory"""
+    if not validate_uuid(truck_id):
+        raise HTTPException(status_code=400, detail="Invalid truck ID")
+    
+    inv = await db.truck_inventories.find_one({"truck_id": truck_id})
+    if not inv:
+        raise HTTPException(status_code=404, detail="Truck inventory not found")
+    
+    # Enrich items with category info
+    enriched_items = []
+    for item in items:
+        inv_item = await db.inventory_items.find_one({"id": item.get("item_id")})
+        if inv_item:
+            enriched_items.append({
+                "item_id": item["item_id"],
+                "item_name": inv_item["name"],
+                "sku": inv_item["sku"],
+                "category_id": inv_item["category_id"],
+                "category_name": inv_item.get("category_name"),
+                "quantity": item.get("quantity", 0),
+                "min_threshold": inv_item.get("min_stock_threshold", 1),
+                "unit": inv_item.get("unit", "each"),
+                "last_counted": item.get("last_counted"),
+                "needs_restock": item.get("quantity", 0) < inv_item.get("min_stock_threshold", 1)
+            })
+    
+    await db.truck_inventories.update_one(
+        {"truck_id": truck_id},
+        {"$set": {"items": enriched_items, "updated_at": datetime.utcnow()}}
+    )
+    
+    return {"message": "Truck inventory updated", "items_count": len(enriched_items)}
+
+@api_router.post("/truck-inventory/{truck_id}/add-item")
+async def add_item_to_truck(truck_id: str, item_id: str, quantity: int):
+    """Add an item to truck inventory"""
+    if not validate_uuid(truck_id) or not validate_uuid(item_id):
+        raise HTTPException(status_code=400, detail="Invalid ID format")
+    
+    inv = await db.truck_inventories.find_one({"truck_id": truck_id})
+    if not inv:
+        raise HTTPException(status_code=404, detail="Truck inventory not found")
+    
+    inv_item = await db.inventory_items.find_one({"id": item_id})
+    if not inv_item:
+        raise HTTPException(status_code=404, detail="Inventory item not found")
+    
+    items = inv.get("items", [])
+    existing_idx = next((i for i, x in enumerate(items) if x.get("item_id") == item_id), None)
+    
+    if existing_idx is not None:
+        items[existing_idx]["quantity"] = quantity
+        items[existing_idx]["last_counted"] = datetime.utcnow().isoformat()
+        items[existing_idx]["needs_restock"] = quantity < inv_item.get("min_stock_threshold", 1)
+    else:
+        items.append({
+            "item_id": item_id,
+            "item_name": inv_item["name"],
+            "sku": inv_item["sku"],
+            "category_id": inv_item["category_id"],
+            "category_name": inv_item.get("category_name"),
+            "quantity": quantity,
+            "min_threshold": inv_item.get("min_stock_threshold", 1),
+            "unit": inv_item.get("unit", "each"),
+            "last_counted": datetime.utcnow().isoformat(),
+            "needs_restock": quantity < inv_item.get("min_stock_threshold", 1)
+        })
+    
+    await db.truck_inventories.update_one(
+        {"truck_id": truck_id},
+        {"$set": {"items": items, "updated_at": datetime.utcnow()}}
+    )
+    
+    return {"message": "Item added to truck inventory"}
+
+# ==================== STOCK CHECK API ====================
+
+@api_router.post("/stock-check", response_model=TruckStockCheck)
+async def submit_stock_check(data: TruckStockCheckCreate):
+    """Submit a truck stock check (at shift start)"""
+    truck = await db.trucks.find_one({"id": data.truck_id})
+    if not truck:
+        raise HTTPException(status_code=404, detail="Truck not found")
+    
+    tech = await db.technicians.find_one({"id": data.technician_id})
+    tech_name = tech["name"] if tech else "Unknown"
+    
+    # Calculate items below threshold
+    items_below = []
+    for item in data.items_checked:
+        if item.get("actual_qty", 0) < item.get("min_threshold", 1):
+            items_below.append(item)
+    
+    stock_check = TruckStockCheck(
+        truck_id=data.truck_id,
+        technician_id=data.technician_id,
+        technician_name=tech_name,
+        shift_session_id=data.shift_session_id,
+        check_type=data.check_type,
+        items_checked=data.items_checked,
+        items_below_threshold=items_below,
+        notes=data.notes
+    )
+    await db.stock_checks.insert_one(stock_check.dict())
+    
+    # Update truck inventory with new counts
+    inv = await db.truck_inventories.find_one({"truck_id": data.truck_id})
+    if inv:
+        items = inv.get("items", [])
+        for checked in data.items_checked:
+            for item in items:
+                if item.get("item_id") == checked.get("item_id"):
+                    item["quantity"] = checked.get("actual_qty", 0)
+                    item["last_counted"] = datetime.utcnow().isoformat()
+                    item["needs_restock"] = checked.get("actual_qty", 0) < item.get("min_threshold", 1)
+        
+        await db.truck_inventories.update_one(
+            {"truck_id": data.truck_id},
+            {"$set": {
+                "items": items,
+                "last_stock_check": datetime.utcnow(),
+                "stock_check_required": False,
+                "updated_at": datetime.utcnow()
+            }}
+        )
+    
+    # Auto-generate restock request if items are below threshold
+    if items_below:
+        restock_items = []
+        for item in items_below:
+            inv_item = await db.inventory_items.find_one({"id": item.get("item_id")})
+            if inv_item:
+                restock_items.append({
+                    "item_id": item["item_id"],
+                    "item_name": inv_item["name"],
+                    "sku": inv_item["sku"],
+                    "current_qty": item.get("actual_qty", 0),
+                    "requested_qty": inv_item.get("min_stock_threshold", 1) * 2,  # Restock to 2x minimum
+                    "reason": "Below minimum threshold"
+                })
+        
+        if restock_items:
+            restock = RestockRequest(
+                truck_id=data.truck_id,
+                truck_name=truck["name"],
+                technician_id=data.technician_id,
+                technician_name=tech_name,
+                request_type="auto",
+                items=restock_items,
+                priority="normal" if len(items_below) < 3 else "high",
+                notes=f"Auto-generated from stock check. {len(items_below)} items below threshold."
+            )
+            await db.restock_requests.insert_one(restock.dict())
+    
+    return stock_check
+
+@api_router.get("/stock-check/required/{technician_id}")
+async def check_if_stock_check_required(technician_id: str):
+    """Check if technician needs to do stock check before starting work"""
+    if not validate_uuid(technician_id):
+        raise HTTPException(status_code=400, detail="Invalid technician ID")
+    
+    truck = await db.trucks.find_one({"assigned_technician_id": technician_id, "status": "active"})
+    if not truck:
+        return {"required": False, "reason": "No truck assigned"}
+    
+    inv = await db.truck_inventories.find_one({"truck_id": truck["id"]})
+    if not inv:
+        return {"required": True, "reason": "No inventory record", "truck_id": truck["id"]}
+    
+    # Check if stock check was done today
+    last_check = inv.get("last_stock_check")
+    if last_check:
+        if isinstance(last_check, str):
+            last_check = datetime.fromisoformat(last_check.replace("Z", "+00:00"))
+        if last_check.date() == datetime.utcnow().date():
+            return {"required": False, "reason": "Already checked today", "truck_id": truck["id"]}
+    
+    return {
+        "required": True,
+        "reason": "Daily stock check required",
+        "truck_id": truck["id"],
+        "truck_name": truck["name"],
+        "items": inv.get("items", [])
+    }
+
+@api_router.get("/stock-checks", response_model=List[TruckStockCheck])
+async def get_stock_checks(
+    truck_id: Optional[str] = None,
+    technician_id: Optional[str] = None,
+    days: int = 7
+):
+    """Get stock check history"""
+    query = {}
+    if truck_id:
+        query["truck_id"] = truck_id
+    if technician_id:
+        query["technician_id"] = technician_id
+    
+    since = datetime.utcnow() - timedelta(days=days)
+    query["created_at"] = {"$gte": since}
+    
+    checks = await db.stock_checks.find(query).sort("created_at", -1).to_list(100)
+    return [TruckStockCheck(**c) for c in checks]
+
+# ==================== RESTOCK REQUESTS API ====================
+
+@api_router.get("/restock-requests", response_model=List[RestockRequest])
+async def get_restock_requests(
+    status: Optional[str] = None,
+    truck_id: Optional[str] = None,
+    priority: Optional[str] = None
+):
+    """Get restock requests"""
+    query = {}
+    if status:
+        query["status"] = status
+    if truck_id:
+        query["truck_id"] = truck_id
+    if priority:
+        query["priority"] = priority
+    
+    requests = await db.restock_requests.find(query).sort("created_at", -1).to_list(100)
+    return [RestockRequest(**r) for r in requests]
+
+@api_router.post("/restock-requests", response_model=RestockRequest)
+async def create_restock_request(data: RestockRequestCreate):
+    """Create a manual restock request"""
+    truck = await db.trucks.find_one({"id": data.truck_id})
+    if not truck:
+        raise HTTPException(status_code=404, detail="Truck not found")
+    
+    tech_name = None
+    if data.technician_id:
+        tech = await db.technicians.find_one({"id": data.technician_id})
+        tech_name = tech["name"] if tech else None
+    
+    restock = RestockRequest(
+        truck_id=data.truck_id,
+        truck_name=truck["name"],
+        technician_id=data.technician_id,
+        technician_name=tech_name,
+        request_type=data.request_type,
+        items=data.items,
+        priority=data.priority,
+        notes=data.notes
+    )
+    await db.restock_requests.insert_one(restock.dict())
+    return restock
+
+@api_router.put("/restock-requests/{request_id}/status")
+async def update_restock_status(request_id: str, status: str, approved_by: Optional[str] = None):
+    """Update restock request status"""
+    if not validate_uuid(request_id):
+        raise HTTPException(status_code=400, detail="Invalid request ID")
+    
+    request = await db.restock_requests.find_one({"id": request_id})
+    if not request:
+        raise HTTPException(status_code=404, detail="Restock request not found")
+    
+    update_data = {"status": status, "updated_at": datetime.utcnow()}
+    if status == "approved" and approved_by:
+        update_data["approved_by"] = approved_by
+        update_data["approved_at"] = datetime.utcnow()
+    elif status == "completed":
+        update_data["completed_at"] = datetime.utcnow()
+        
+        # Update truck inventory with restocked items
+        for item in request.get("items", []):
+            await db.truck_inventories.update_one(
+                {"truck_id": request["truck_id"], "items.item_id": item["item_id"]},
+                {"$set": {
+                    "items.$.quantity": item.get("requested_qty", 0),
+                    "items.$.needs_restock": False,
+                    "items.$.last_counted": datetime.utcnow().isoformat()
+                }}
+            )
+            
+            # Log audit entry
+            audit = InventoryAuditLog(
+                truck_id=request["truck_id"],
+                item_id=item["item_id"],
+                item_name=item.get("item_name", ""),
+                sku=item.get("sku", ""),
+                action="restock",
+                quantity_before=item.get("current_qty", 0),
+                quantity_change=item.get("requested_qty", 0) - item.get("current_qty", 0),
+                quantity_after=item.get("requested_qty", 0),
+                restock_request_id=request_id,
+                performed_by_id=approved_by or "system",
+                performed_by_name="System",
+                notes=f"Restocked via request {request_id}"
+            )
+            await db.inventory_audit_log.insert_one(audit.dict())
+    
+    await db.restock_requests.update_one({"id": request_id}, {"$set": update_data})
+    return {"message": f"Status updated to {status}"}
+
+# ==================== JOB EQUIPMENT USAGE API ====================
+
+@api_router.post("/jobs/{job_id}/equipment-usage")
+async def create_job_equipment_usage(job_id: str, technician_id: str, truck_id: str, planned_items: List[dict] = []):
+    """Create equipment usage record for a job (called when job starts)"""
+    job = await db.jobs.find_one({"$or": [{"id": job_id}, {"job_number": job_id}]})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    tech = await db.technicians.find_one({"id": technician_id})
+    if not tech:
+        raise HTTPException(status_code=404, detail="Technician not found")
+    
+    usage = JobEquipmentUsage(
+        job_id=job["id"],
+        job_number=job["job_number"],
+        technician_id=technician_id,
+        technician_name=tech["name"],
+        truck_id=truck_id,
+        planned_items=planned_items
+    )
+    await db.job_equipment_usage.insert_one(usage.dict())
+    return usage
+
+@api_router.get("/jobs/{job_id}/equipment-usage")
+async def get_job_equipment_usage(job_id: str):
+    """Get equipment usage for a job"""
+    job = await db.jobs.find_one({"$or": [{"id": job_id}, {"job_number": job_id}]})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    usage = await db.job_equipment_usage.find_one({"job_id": job["id"]})
+    if not usage:
+        return None
+    return usage
+
+@api_router.post("/jobs/{job_id}/equipment-usage/approve")
+async def approve_job_equipment(job_id: str, approval: JobEquipmentApproval):
+    """Technician approves/edits equipment actually used on job"""
+    job = await db.jobs.find_one({"$or": [{"id": job_id}, {"job_number": job_id}]})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    usage = await db.job_equipment_usage.find_one({"job_id": job["id"]})
+    if not usage:
+        raise HTTPException(status_code=404, detail="Equipment usage record not found")
+    
+    # Check for variance between planned and actual
+    planned_ids = {i.get("item_id"): i.get("quantity", 0) for i in usage.get("planned_items", [])}
+    actual_ids = {i.get("item_id"): i.get("quantity", 0) for i in approval.actual_items}
+    has_variance = planned_ids != actual_ids
+    
+    await db.job_equipment_usage.update_one(
+        {"id": usage["id"]},
+        {"$set": {
+            "actual_items": approval.actual_items,
+            "tech_approved": True,
+            "tech_approved_at": datetime.utcnow(),
+            "tech_notes": approval.notes,
+            "has_variance": has_variance,
+            "status": "adjusted" if has_variance else "approved",
+            "updated_at": datetime.utcnow()
+        }}
+    )
+    
+    # Deduct from truck inventory and create audit logs
+    truck_id = usage["truck_id"]
+    for item in approval.actual_items:
+        item_id = item.get("item_id")
+        qty_used = item.get("quantity", 0)
+        
+        if qty_used > 0:
+            # Get current truck inventory
+            inv = await db.truck_inventories.find_one({"truck_id": truck_id})
+            if inv:
+                items = inv.get("items", [])
+                for inv_item in items:
+                    if inv_item.get("item_id") == item_id:
+                        old_qty = inv_item.get("quantity", 0)
+                        new_qty = max(0, old_qty - qty_used)
+                        inv_item["quantity"] = new_qty
+                        inv_item["needs_restock"] = new_qty < inv_item.get("min_threshold", 1)
+                        
+                        # Create audit log
+                        audit = InventoryAuditLog(
+                            truck_id=truck_id,
+                            item_id=item_id,
+                            item_name=item.get("item_name", inv_item.get("item_name", "")),
+                            sku=item.get("sku", inv_item.get("sku", "")),
+                            action="job_usage",
+                            quantity_before=old_qty,
+                            quantity_change=-qty_used,
+                            quantity_after=new_qty,
+                            job_id=job["id"],
+                            job_number=job["job_number"],
+                            performed_by_id=usage["technician_id"],
+                            performed_by_name=usage["technician_name"],
+                            notes=f"Used on job {job['job_number']}"
+                        )
+                        await db.inventory_audit_log.insert_one(audit.dict())
+                        break
+                
+                await db.truck_inventories.update_one(
+                    {"truck_id": truck_id},
+                    {"$set": {"items": items, "updated_at": datetime.utcnow()}}
+                )
+    
+    # Mark inventory as deducted
+    await db.job_equipment_usage.update_one(
+        {"id": usage["id"]},
+        {"$set": {"inventory_deducted": True, "inventory_deducted_at": datetime.utcnow()}}
+    )
+    
+    return {"message": "Equipment approved and inventory updated", "has_variance": has_variance}
+
+# ==================== INVENTORY AUDIT LOG API ====================
+
+@api_router.get("/inventory/audit-log")
+async def get_inventory_audit_log(
+    truck_id: Optional[str] = None,
+    job_id: Optional[str] = None,
+    item_id: Optional[str] = None,
+    days: int = 30
+):
+    """Get inventory audit log"""
+    query = {}
+    if truck_id:
+        query["truck_id"] = truck_id
+    if job_id:
+        query["job_id"] = job_id
+    if item_id:
+        query["item_id"] = item_id
+    
+    since = datetime.utcnow() - timedelta(days=days)
+    query["created_at"] = {"$gte": since}
+    
+    logs = await db.inventory_audit_log.find(query).sort("created_at", -1).to_list(500)
+    return logs
+
+# ==================== J-LOAD CALCULATOR API ====================
+
+# Climate zone multipliers for quick estimate
+CLIMATE_FACTORS = {
+    "1": {"cooling": 35, "heating": 15},  # Very Hot-Humid (Miami)
+    "2": {"cooling": 32, "heating": 20},  # Hot-Humid (Houston)
+    "3": {"cooling": 28, "heating": 28},  # Hot-Dry/Warm-Humid (LA, Dallas)
+    "4": {"cooling": 24, "heating": 35},  # Mixed-Humid (NYC, DC)
+    "5": {"cooling": 20, "heating": 42},  # Cold (Chicago, Denver)
+    "6": {"cooling": 18, "heating": 48},  # Cold (Minneapolis)
+    "7": {"cooling": 15, "heating": 55},  # Very Cold (Fargo)
+}
+
+BUILDING_AGE_FACTORS = {
+    "new": 0.85,
+    "10_years": 1.0,
+    "20_years": 1.15,
+    "30_plus": 1.30
+}
+
+INSULATION_FACTORS = {
+    "poor": 1.25,
+    "average": 1.0,
+    "good": 0.85,
+    "excellent": 0.70
+}
+
+WINDOW_FACTORS = {
+    "single": 1.3,
+    "double": 1.0,
+    "triple": 0.85,
+    "low_e": 0.75
+}
+
+@api_router.post("/jload/quick-estimate", response_model=JLoadQuickEstimate)
+async def calculate_quick_estimate(data: JLoadQuickEstimateCreate, technician_id: Optional[str] = None):
+    """Calculate quick J-load estimate"""
+    climate = CLIMATE_FACTORS.get(data.climate_zone, CLIMATE_FACTORS["3"])
+    age_factor = BUILDING_AGE_FACTORS.get(data.building_age, 1.0)
+    insulation_factor = INSULATION_FACTORS.get(data.insulation_quality, 1.0)
+    window_factor = WINDOW_FACTORS.get(data.window_type, 1.0)
+    
+    # Base calculation
+    volume = data.square_footage * data.ceiling_height * data.num_floors
+    window_load = data.num_windows * 1000 * window_factor  # ~1000 BTU per window adjusted
+    
+    # Cooling calculation (BTU/hr)
+    cooling_base = data.square_footage * climate["cooling"]
+    cooling_btuh = cooling_base * age_factor * insulation_factor + window_load
+    
+    # Heating calculation (BTU/hr)
+    heating_base = data.square_footage * climate["heating"]
+    heating_btuh = heating_base * age_factor * insulation_factor
+    
+    # Commercial adjustment
+    if data.building_type == "commercial":
+        cooling_btuh *= 1.2  # Higher occupancy/equipment loads
+        heating_btuh *= 0.9  # More internal heat gains
+    elif data.building_type == "mixed":
+        cooling_btuh *= 1.1
+    
+    # Equipment sizing
+    tonnage = cooling_btuh / 12000
+    recommended_tonnage = math.ceil(tonnage * 2) / 2  # Round to nearest 0.5 ton
+    recommended_furnace = math.ceil(heating_btuh / 10000) * 10000  # Round to nearest 10k BTU
+    
+    # Equipment recommendations
+    equipment = [
+        {
+            "type": "Air Conditioner",
+            "size": f"{recommended_tonnage} Ton",
+            "model_suggestion": f"Carrier 24ACC6{int(recommended_tonnage*12):02d}" if recommended_tonnage <= 5 else "Commercial RTU recommended"
+        },
+        {
+            "type": "Gas Furnace",
+            "size": f"{int(recommended_furnace/1000)}K BTU",
+            "model_suggestion": f"Carrier 59SC5A{int(recommended_furnace/1000):03d}"
+        }
+    ]
+    
+    tech_name = None
+    if technician_id:
+        tech = await db.technicians.find_one({"id": technician_id})
+        tech_name = tech["name"] if tech else None
+    
+    estimate = JLoadQuickEstimate(
+        job_id=data.job_id,
+        site_id=data.site_id,
+        quote_id=data.quote_id,
+        square_footage=data.square_footage,
+        climate_zone=data.climate_zone,
+        building_type=data.building_type,
+        building_age=data.building_age,
+        insulation_quality=data.insulation_quality,
+        num_floors=data.num_floors,
+        ceiling_height=data.ceiling_height,
+        num_windows=data.num_windows,
+        window_type=data.window_type,
+        cooling_btuh=round(cooling_btuh),
+        heating_btuh=round(heating_btuh),
+        recommended_tonnage=recommended_tonnage,
+        recommended_furnace_btuh=recommended_furnace,
+        recommended_equipment=equipment,
+        notes=data.notes,
+        calculated_by_id=technician_id,
+        calculated_by_name=tech_name
+    )
+    
+    await db.jload_estimates.insert_one(estimate.dict())
+    return estimate
+
+@api_router.post("/jload/manual-j", response_model=ManualJLoadCalculation)
+async def create_manual_j_calculation(data: ManualJLoadCreate, technician_id: Optional[str] = None):
+    """Create a Manual J load calculation (full ACCA method)"""
+    tech_name = None
+    if technician_id:
+        tech = await db.technicians.find_one({"id": technician_id})
+        tech_name = tech["name"] if tech else None
+    
+    calc = ManualJLoadCalculation(
+        job_id=data.job_id,
+        site_id=data.site_id,
+        quote_id=data.quote_id,
+        project_name=sanitize_string(data.project_name, 200),
+        address=sanitize_string(data.address, 300),
+        city=sanitize_string(data.city, 100),
+        state=sanitize_string(data.state, 50),
+        zip_code=sanitize_string(data.zip_code, 20),
+        climate_zone=data.climate_zone,
+        total_square_footage=data.total_square_footage,
+        conditioned_volume=data.total_square_footage * data.ceiling_height * data.num_floors,
+        calculated_by_id=technician_id,
+        calculated_by_name=tech_name,
+        status="draft"
+    )
+    
+    await db.manual_j_calculations.insert_one(calc.dict())
+    return calc
+
+@api_router.get("/jload/manual-j/{calc_id}", response_model=ManualJLoadCalculation)
+async def get_manual_j_calculation(calc_id: str):
+    """Get a Manual J calculation"""
+    if not validate_uuid(calc_id):
+        raise HTTPException(status_code=400, detail="Invalid calculation ID")
+    calc = await db.manual_j_calculations.find_one({"id": calc_id})
+    if not calc:
+        raise HTTPException(status_code=404, detail="Calculation not found")
+    return ManualJLoadCalculation(**calc)
+
+@api_router.put("/jload/manual-j/{calc_id}")
+async def update_manual_j_calculation(calc_id: str, update_data: dict):
+    """Update Manual J calculation with building envelope data"""
+    if not validate_uuid(calc_id):
+        raise HTTPException(status_code=400, detail="Invalid calculation ID")
+    
+    calc = await db.manual_j_calculations.find_one({"id": calc_id})
+    if not calc:
+        raise HTTPException(status_code=404, detail="Calculation not found")
+    
+    update_data["updated_at"] = datetime.utcnow()
+    await db.manual_j_calculations.update_one({"id": calc_id}, {"$set": update_data})
+    
+    updated = await db.manual_j_calculations.find_one({"id": calc_id})
+    return updated
+
+@api_router.post("/jload/manual-j/{calc_id}/calculate")
+async def run_manual_j_calculation(calc_id: str):
+    """Run the full Manual J calculation"""
+    if not validate_uuid(calc_id):
+        raise HTTPException(status_code=400, detail="Invalid calculation ID")
+    
+    calc = await db.manual_j_calculations.find_one({"id": calc_id})
+    if not calc:
+        raise HTTPException(status_code=404, detail="Calculation not found")
+    
+    # Simplified Manual J calculation
+    # In production, this would use full ACCA Manual J procedures
+    
+    total_wall_load = 0
+    for wall in calc.get("walls", []):
+        area = wall.get("area_sqft", 0)
+        r_value = wall.get("r_value", 13)
+        u_factor = 1 / r_value
+        # Simplified: delta_t * area * u_factor
+        total_wall_load += 30 * area * u_factor  # 30 degree delta T
+    
+    total_window_load = 0
+    for window in calc.get("windows", []):
+        area = window.get("area_sqft", 0)
+        u_factor = window.get("u_factor", 0.5)
+        shgc = window.get("shgc", 0.4)
+        total_window_load += area * (30 * u_factor + 200 * shgc)  # Conduction + solar
+    
+    total_ceiling_load = 0
+    for ceiling in calc.get("ceilings", []):
+        area = ceiling.get("area_sqft", 0)
+        r_value = ceiling.get("r_value", 30)
+        u_factor = 1 / r_value
+        total_ceiling_load += 50 * area * u_factor  # Higher delta T for attic
+    
+    infiltration_load = calc.get("conditioned_volume", 0) * calc.get("infiltration_ach", 0.5) * 0.018 * 30
+    
+    internal_gains = (
+        calc.get("occupants", 2) * 300 +  # ~300 BTU per person sensible
+        calc.get("appliance_load_btuh", 0) +
+        calc.get("lighting_load_btuh", 0)
+    )
+    
+    # Total sensible cooling load
+    sensible_cooling = total_wall_load + total_window_load + total_ceiling_load + infiltration_load + internal_gains
+    
+    # Latent load (roughly 30% of sensible for humid climates)
+    latent_cooling = sensible_cooling * 0.3
+    
+    # Total cooling
+    total_cooling = sensible_cooling + latent_cooling
+    
+    # Heating load (no solar or internal gains credit)
+    heating_load = (total_wall_load + total_window_load + total_ceiling_load + infiltration_load) * 1.2  # Higher delta T
+    
+    # Duct losses
+    duct_loss_factor = 1 + (calc.get("duct_leakage_percent", 10) / 100)
+    if calc.get("duct_location") != "conditioned":
+        duct_loss_factor += 0.1
+    
+    total_cooling *= duct_loss_factor
+    heating_load *= duct_loss_factor
+    
+    # Equipment sizing
+    cooling_tons = total_cooling / 12000
+    recommended_tons = math.ceil(cooling_tons * 2) / 2
+    recommended_heating = math.ceil(heating_load / 10000) * 10000
+    
+    equipment = [
+        {
+            "type": "Air Conditioner/Heat Pump",
+            "size": f"{recommended_tons} Ton",
+            "capacity_btuh": int(recommended_tons * 12000)
+        },
+        {
+            "type": "Furnace/Backup Heat",
+            "size": f"{int(recommended_heating/1000)}K BTU",
+            "capacity_btuh": int(recommended_heating)
+        }
+    ]
+    
+    await db.manual_j_calculations.update_one(
+        {"id": calc_id},
+        {"$set": {
+            "sensible_cooling_load": round(sensible_cooling),
+            "latent_cooling_load": round(latent_cooling),
+            "total_cooling_load": round(total_cooling),
+            "heating_load": round(heating_load),
+            "recommended_cooling_tons": recommended_tons,
+            "recommended_heating_btuh": recommended_heating,
+            "equipment_recommendations": equipment,
+            "status": "calculated",
+            "updated_at": datetime.utcnow()
+        }}
+    )
+    
+    return {
+        "sensible_cooling_load": round(sensible_cooling),
+        "latent_cooling_load": round(latent_cooling),
+        "total_cooling_load": round(total_cooling),
+        "heating_load": round(heating_load),
+        "recommended_cooling_tons": recommended_tons,
+        "recommended_heating_btuh": recommended_heating,
+        "equipment_recommendations": equipment
+    }
+
+@api_router.get("/jload/by-job/{job_id}")
+async def get_jload_calculations_for_job(job_id: str):
+    """Get all J-load calculations for a job"""
+    estimates = await db.jload_estimates.find({"job_id": job_id}).to_list(10)
+    manual_calcs = await db.manual_j_calculations.find({"job_id": job_id}).to_list(10)
+    return {
+        "quick_estimates": estimates,
+        "manual_j_calculations": manual_calcs
+    }
+
 # ==================== SEED DATA ====================
 
 @api_router.post("/seed")
