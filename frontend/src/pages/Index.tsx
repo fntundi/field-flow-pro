@@ -409,13 +409,19 @@ const Dashboard = () => {
       case "dispatcher":
         return jobs.filter(j => j.status === "open" || j.status === "in_progress");
       case "technician":
-        return jobs.filter(j => j.status === "in_progress").slice(0, 4);
+        // Show both active jobs and jobs available for dispatch
+        return jobs.filter(j => j.status === "in_progress" || j.status === "open" || j.status === "urgent").slice(0, 6);
       case "sales":
         return jobs.filter(j => j.status === "pending" || j.priority === "high").slice(0, 4);
       default:
         return jobs.filter(j => j.status === "in_progress" || j.status === "open").slice(0, 4);
     }
   };
+
+  // Jobs available for dispatch (for technician time tracking)
+  const availableJobsForDispatch = jobs.filter(j => 
+    j.status === "open" || j.status === "in_progress" || j.status === "urgent"
+  ).slice(0, 6);
 
   const urgentJobs = jobs.filter(j => j.priority === "urgent" || j.status === "urgent");
   const displayJobs = getJobsForRole();
