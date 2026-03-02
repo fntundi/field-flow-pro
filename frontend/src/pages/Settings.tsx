@@ -45,9 +45,13 @@ import {
   CheckCircle,
   XCircle,
   Loader2,
+  BellRing,
+  BellOff,
+  Smartphone,
 } from "lucide-react";
 import { settingsApi, rolesApi, quickbooksApi, SystemSettings, Role } from "@/lib/api";
 import { toast } from "sonner";
+import { usePushNotifications, usePWAInstall, useOnlineStatus } from "@/hooks/usePWA";
 
 export default function Settings() {
   const [activeTab, setActiveTab] = useState("general");
