@@ -8052,6 +8052,56 @@ async def seed_database():
         }
         await db.service_agreements.insert_one(agreement)
     
+    # ===== VOIP CALL LOGS =====
+    await db.voip_call_logs.delete_many({})
+    await db.voip_sms.delete_many({})
+    
+    voip_calls = [
+        {"direction": "inbound", "status": "completed", "duration": 185, "customer_name": "Sarah Mitchell"},
+        {"direction": "outbound", "status": "completed", "duration": 342, "customer_name": "Acme Corp"},
+        {"direction": "inbound", "status": "missed", "duration": 0, "customer_name": "James Rivera"},
+        {"direction": "outbound", "status": "completed", "duration": 95, "customer_name": "Metro Office Park"},
+        {"direction": "inbound", "status": "voicemail", "duration": 45, "customer_name": "Thompson Family"},
+        {"direction": "outbound", "status": "completed", "duration": 210, "customer_name": "Green Valley HOA"},
+        {"direction": "inbound", "status": "completed", "duration": 480, "customer_name": "Dr. Patricia Wong"},
+        {"direction": "outbound", "status": "failed", "duration": 0, "customer_name": None},
+    ]
+    
+    for i, call in enumerate(voip_calls):
+        customer = await db.customers.find_one({"name": call["customer_name"]}) if call["customer_name"] else None
+        call_log = VoIPCallLog(
+            caller_number="+15551234567" if call["direction"] == "outbound" else f"+1555{100+i:04d}",
+            called_number=f"+1555{200+i:04d}" if call["direction"] == "outbound" else "+15559876543",
+            direction=call["direction"],
+            status=call["status"],
+            duration_seconds=call["duration"],
+            customer_id=customer["id"] if customer else None,
+            customer_name=call["customer_name"],
+            notes=f"Demo call #{i+1}" if call["status"] == "completed" else None,
+            created_at=datetime.utcnow() - timedelta(hours=random.randint(1, 72))
+        )
+        await db.voip_call_logs.insert_one(call_log.dict())
+    
+    voip_sms = [
+        {"direction": "outbound", "message": "Your appointment is confirmed for tomorrow at 10 AM.", "customer_name": "Sarah Mitchell"},
+        {"direction": "inbound", "message": "Running about 15 mins late, sorry!", "customer_name": "James Rivera"},
+        {"direction": "outbound", "message": "Technician Mike is on his way. ETA 20 minutes.", "customer_name": "Thompson Family"},
+    ]
+    
+    for sms in voip_sms:
+        customer = await db.customers.find_one({"name": sms["customer_name"]}) if sms["customer_name"] else None
+        sms_log = VoIPSMS(
+            from_number="+15551234567" if sms["direction"] == "outbound" else f"+1555{random.randint(1000,9999)}",
+            to_number=f"+1555{random.randint(1000,9999)}" if sms["direction"] == "outbound" else "+15559876543",
+            message=sms["message"],
+            direction=sms["direction"],
+            status="sent" if sms["direction"] == "outbound" else "received",
+            customer_id=customer["id"] if customer else None,
+            customer_name=sms["customer_name"],
+            created_at=datetime.utcnow() - timedelta(hours=random.randint(1, 24))
+        )
+        await db.voip_sms.insert_one(sms_log.dict())
+    
     return {
         "message": "Demo database seeded successfully",
         "customers": len(customers_data),
@@ -8068,6 +8118,8 @@ async def seed_database():
         "projects": len(projects_data),
         "equipment": len(equipment_data),
         "locations": len(locations_data),
+        "voip_calls": len(voip_calls),
+        "voip_sms": len(voip_sms),
         "service_agreements": len(agreements_data),
         "sample_appointment_token": appointment_tokens[0] if appointment_tokens else None,
     }
