@@ -2653,12 +2653,118 @@ async def seed_database():
     
     await ensure_default_board_config()
     
+    # ===== TRUCKS & INVENTORY =====
+    await db.trucks.delete_many({})
+    await db.truck_inventories.delete_many({})
+    await db.inventory_items.delete_many({})
+    
+    # Ensure standard categories exist
+    await ensure_standard_categories()
+    categories = await db.inventory_categories.find().to_list(100)
+    cat_map = {c["name"]: c["id"] for c in categories}
+    
+    # Create inventory items
+    inventory_items_data = [
+        # Filters
+        {"sku": "FLT-20x25x1", "name": "Filter 20x25x1", "category": "Filters", "unit_cost": 5.50, "retail_price": 15.00, "min_threshold": 10},
+        {"sku": "FLT-16x25x1", "name": "Filter 16x25x1", "category": "Filters", "unit_cost": 4.50, "retail_price": 12.00, "min_threshold": 10},
+        {"sku": "FLT-20x20x1", "name": "Filter 20x20x1", "category": "Filters", "unit_cost": 4.00, "retail_price": 10.00, "min_threshold": 10},
+        # Refrigerant
+        {"sku": "REF-410A-25", "name": "R-410A Refrigerant 25lb", "category": "Refrigerant", "unit_cost": 125.00, "retail_price": 200.00, "min_threshold": 2},
+        {"sku": "REF-22-30", "name": "R-22 Refrigerant 30lb", "category": "Refrigerant", "unit_cost": 450.00, "retail_price": 600.00, "min_threshold": 1},
+        # Capacitors
+        {"sku": "CAP-35-5", "name": "Dual Run Capacitor 35/5 MFD", "category": "Capacitors", "unit_cost": 12.00, "retail_price": 45.00, "min_threshold": 5},
+        {"sku": "CAP-45-5", "name": "Dual Run Capacitor 45/5 MFD", "category": "Capacitors", "unit_cost": 14.00, "retail_price": 50.00, "min_threshold": 5},
+        {"sku": "CAP-55-5", "name": "Dual Run Capacitor 55/5 MFD", "category": "Capacitors", "unit_cost": 16.00, "retail_price": 55.00, "min_threshold": 3},
+        # Electrical
+        {"sku": "CTR-1P-30A", "name": "Contactor 1-Pole 30A", "category": "Electrical", "unit_cost": 18.00, "retail_price": 65.00, "min_threshold": 3},
+        {"sku": "CTR-2P-40A", "name": "Contactor 2-Pole 40A", "category": "Electrical", "unit_cost": 25.00, "retail_price": 85.00, "min_threshold": 2},
+        # Copper & Fittings
+        {"sku": "CU-38-50", "name": "Copper Tubing 3/8\" x 50ft", "category": "Copper & Fittings", "unit_cost": 85.00, "retail_price": 140.00, "min_threshold": 2},
+        {"sku": "FIT-38-UNION", "name": "3/8\" Union Fitting", "category": "Copper & Fittings", "unit_cost": 8.00, "retail_price": 25.00, "min_threshold": 10},
+        # Thermostats
+        {"sku": "TSTAT-ECOBEE", "name": "Ecobee Smart Thermostat", "category": "Thermostats", "unit_cost": 180.00, "retail_price": 280.00, "min_threshold": 2},
+        {"sku": "TSTAT-HONEY-T6", "name": "Honeywell T6 Pro", "category": "Thermostats", "unit_cost": 95.00, "retail_price": 160.00, "min_threshold": 3},
+    ]
+    
+    created_items = []
+    for item_data in inventory_items_data:
+        cat_id = cat_map.get(item_data["category"], "")
+        item = InventoryItem(
+            sku=item_data["sku"],
+            name=item_data["name"],
+            category_id=cat_id,
+            category_name=item_data["category"],
+            unit="each",
+            unit_cost=item_data["unit_cost"],
+            retail_price=item_data["retail_price"],
+            min_stock_threshold=item_data["min_threshold"]
+        )
+        await db.inventory_items.insert_one(item.dict())
+        created_items.append(item)
+    
+    # Create trucks and assign to technicians
+    trucks_data = [
+        {"truck_number": "T-101", "name": "Service Van 1", "make": "Ford", "model": "Transit 250", "year": 2023, "tech_idx": 0},
+        {"truck_number": "T-102", "name": "Service Van 2", "make": "Chevrolet", "model": "Express 2500", "year": 2022, "tech_idx": 1},
+        {"truck_number": "T-103", "name": "Install Truck 1", "make": "Ford", "model": "F-250", "year": 2023, "tech_idx": 2},
+        {"truck_number": "T-104", "name": "Maintenance Van", "make": "RAM", "model": "ProMaster 1500", "year": 2024, "tech_idx": 3},
+    ]
+    
+    for truck_data in trucks_data:
+        tech_id = tech_ids[truck_data["tech_idx"]] if truck_data["tech_idx"] < len(tech_ids) else None
+        tech_name = None
+        if tech_id:
+            tech = await db.technicians.find_one({"id": tech_id})
+            tech_name = tech["name"] if tech else None
+        
+        truck = Truck(
+            truck_number=truck_data["truck_number"],
+            name=truck_data["name"],
+            make=truck_data["make"],
+            model=truck_data["model"],
+            year=truck_data["year"],
+            assigned_technician_id=tech_id,
+            assigned_technician_name=tech_name
+        )
+        await db.trucks.insert_one(truck.dict())
+        
+        # Create truck inventory with random stock levels
+        import random
+        truck_items = []
+        for item in created_items:
+            qty = random.randint(item.min_stock_threshold - 2, item.min_stock_threshold + 5)
+            qty = max(0, qty)  # Ensure non-negative
+            truck_items.append({
+                "item_id": item.id,
+                "item_name": item.name,
+                "sku": item.sku,
+                "category_id": item.category_id,
+                "category_name": item.category_name,
+                "quantity": qty,
+                "min_threshold": item.min_stock_threshold,
+                "unit": item.unit,
+                "needs_restock": qty < item.min_stock_threshold
+            })
+        
+        truck_inv = TruckInventory(
+            truck_id=truck.id,
+            truck_name=truck.name,
+            technician_id=tech_id,
+            technician_name=tech_name,
+            items=truck_items,
+            stock_check_required=True
+        )
+        await db.truck_inventories.insert_one(truck_inv.dict())
+    
     return {
         "message": "Demo database seeded successfully",
         "technicians": len(technicians_data),
         "jobs": len(jobs_data),
         "tasks": len(tasks_data),
         "appointments": len(appointments_data),
+        "trucks": len(trucks_data),
+        "inventory_items": len(created_items),
         "sample_appointment_token": appointment_tokens[0] if appointment_tokens else None,
     }
 
