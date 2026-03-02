@@ -534,6 +534,17 @@ export default function Invoices() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
+                              {invoice.status !== "paid" && invoice.balance_due > 0 && (
+                                <DropdownMenuItem 
+                                  onClick={() => handlePayOnline(invoice)}
+                                  disabled={isProcessingPayment}
+                                  className="text-emerald-400"
+                                  data-testid={`pay-online-${invoice.id}`}
+                                >
+                                  <CreditCard className="w-4 h-4 mr-2" />
+                                  Pay Online
+                                </DropdownMenuItem>
+                              )}
                               <DropdownMenuItem onClick={() => { setSelectedInvoice(invoice); setShowPaymentDialog(true); }}>
                                 <CreditCard className="w-4 h-4 mr-2" />Record Payment
                               </DropdownMenuItem>
