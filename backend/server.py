@@ -2541,6 +2541,179 @@ async def get_jload_calculations_for_job(job_id: str):
         "manual_j_calculations": manual_calcs
     }
 
+# ==================== AI FEATURES API ====================
+
+# Initialize Gemini client lazily
+_gemini_client = None
+
+def get_gemini_client():
+    global _gemini_client
+    if _gemini_client is None:
+        api_key = os.environ.get("EMERGENT_LLM_KEY")
+        if api_key:
+            try:
+                from emergentintegrations.llm.chat import GeminiChat
+                _gemini_client = GeminiChat(api_key=api_key)
+            except Exception as e:
+                logger.error(f"Failed to initialize Gemini client: {e}")
+    return _gemini_client
+
+@api_router.post("/ai/scheduling-suggestions")
+async def get_scheduling_suggestions(data: dict):
+    """AI-powered scheduling suggestions for dispatchers"""
+    settings = await get_system_settings()
+    if not settings.ai_features_enabled:
+        raise HTTPException(status_code=400, detail="AI features are disabled")
+    
+    client = get_gemini_client()
+    if not client:
+        raise HTTPException(status_code=500, detail="AI service not available")
+    
+    # Get context data
+    jobs_today = data.get("jobs", [])
+    technicians = data.get("technicians", [])
+    new_job = data.get("new_job", {})
+    
+    prompt = f"""You are an HVAC dispatch optimization assistant. Based on the following information, suggest the best scheduling options.
+
+Current Jobs Today:
+{jobs_today}
+
+Available Technicians:
+{technicians}
+
+New Job to Schedule:
+- Type: {new_job.get('job_type', 'Service')}
+- Priority: {new_job.get('priority', 'normal')}
+- Location: {new_job.get('address', 'Unknown')}
+- Estimated Duration: {new_job.get('estimated_hours', 2)} hours
+- Customer: {new_job.get('customer_name', 'Unknown')}
+
+Provide 2-3 scheduling recommendations with:
+1. Best technician match and why
+2. Suggested time slot
+3. Any potential conflicts to consider
+
+Keep response concise and actionable."""
+
+    try:
+        response = await client.chat(
+            prompt=prompt,
+            model="gemini-2.0-flash"
+        )
+        return {
+            "suggestions": response,
+            "ai_model": "gemini-2.0-flash"
+        }
+    except Exception as e:
+        logger.error(f"AI scheduling error: {e}")
+        raise HTTPException(status_code=500, detail="AI service error")
+
+@api_router.post("/ai/job-summary")
+async def generate_job_summary(data: dict):
+    """AI-powered job summary generation"""
+    settings = await get_system_settings()
+    if not settings.ai_features_enabled:
+        raise HTTPException(status_code=400, detail="AI features are disabled")
+    
+    client = get_gemini_client()
+    if not client:
+        raise HTTPException(status_code=500, detail="AI service not available")
+    
+    job_id = data.get("job_id")
+    if job_id:
+        job = await db.jobs.find_one({"id": job_id})
+        if job:
+            job.pop("_id", None)
+            data["job"] = job
+    
+    prompt = f"""You are an HVAC service documentation assistant. Generate a professional job summary based on this information:
+
+Job Details:
+- Type: {data.get('job_type', 'Service')}
+- Title: {data.get('title', 'Service Call')}
+- Description: {data.get('description', 'N/A')}
+- Customer: {data.get('customer_name', 'Unknown')}
+- Address: {data.get('address', 'Unknown')}
+
+Work Performed:
+{data.get('notes', 'No notes provided')}
+
+Equipment Used:
+{data.get('equipment_used', 'None recorded')}
+
+Generate a professional summary (2-3 paragraphs) that:
+1. Summarizes the issue and diagnosis
+2. Describes work performed
+3. Notes any recommendations for the customer
+
+Use professional HVAC terminology. Keep it customer-friendly."""
+
+    try:
+        response = await client.chat(
+            prompt=prompt,
+            model="gemini-2.0-flash"
+        )
+        return {
+            "summary": response,
+            "ai_model": "gemini-2.0-flash"
+        }
+    except Exception as e:
+        logger.error(f"AI summary error: {e}")
+        raise HTTPException(status_code=500, detail="AI service error")
+
+@api_router.post("/ai/predictive-maintenance")
+async def get_predictive_maintenance(data: dict):
+    """AI-powered predictive maintenance suggestions"""
+    settings = await get_system_settings()
+    if not settings.ai_features_enabled:
+        raise HTTPException(status_code=400, detail="AI features are disabled")
+    
+    client = get_gemini_client()
+    if not client:
+        raise HTTPException(status_code=500, detail="AI service not available")
+    
+    equipment = data.get("equipment", {})
+    service_history = data.get("service_history", [])
+    
+    prompt = f"""You are an HVAC predictive maintenance expert. Analyze this equipment and service history to predict maintenance needs.
+
+Equipment:
+- Type: {equipment.get('equipment_type', 'Unknown')}
+- Manufacturer: {equipment.get('manufacturer', 'Unknown')}
+- Model: {equipment.get('model', 'Unknown')}
+- Install Date: {equipment.get('install_date', 'Unknown')}
+- Last Service: {equipment.get('last_service_date', 'Unknown')}
+
+Service History (last 5 visits):
+{service_history[:5] if service_history else 'No service history'}
+
+Based on:
+1. Equipment age and typical lifecycle
+2. Service history patterns
+3. Common failure modes for this equipment type
+
+Provide:
+1. Predicted maintenance timeline (next 12 months)
+2. Top 3 components likely to need attention
+3. Recommended preventive actions
+4. Estimated cost impact of deferred maintenance
+
+Keep response focused and actionable."""
+
+    try:
+        response = await client.chat(
+            prompt=prompt,
+            model="gemini-2.0-flash"
+        )
+        return {
+            "predictions": response,
+            "ai_model": "gemini-2.0-flash"
+        }
+    except Exception as e:
+        logger.error(f"AI predictive maintenance error: {e}")
+        raise HTTPException(status_code=500, detail="AI service error")
+
 # ==================== GOOGLE MAPS ROUTING API ====================
 
 async def get_system_settings():
