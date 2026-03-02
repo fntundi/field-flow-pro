@@ -6,11 +6,13 @@ import { ChevronRight, Home } from "lucide-react";
 const routeLabels: Record<string, string> = {
   "": "Dashboard",
   "jobs": "Jobs",
+  "projects": "Projects",
   "sales": "Sales",
   "estimates": "Estimates",
   "dispatch": "Dispatch",
   "leads": "Leads & PCBs",
   "customers": "Customers",
+  "sites": "Sites",
   "technicians": "Technicians",
   "schedule": "Schedule",
   "maintenance": "Maintenance",
@@ -26,12 +28,14 @@ const routeLabels: Record<string, string> = {
 
 // Dynamic labels for ID-based routes
 const getDynamicLabel = (segment: string, prevSegment: string): string | null => {
-  // Check if this looks like an ID (UUID or JOB-XXX pattern)
-  if (segment.match(/^[0-9a-f]{8}-[0-9a-f]{4}/i)) {
-    return null; // Will be replaced with actual name from context
-  }
+  // Check if this looks like a JOB-XXX or TASK-XXX pattern
   if (segment.match(/^(JOB|TASK|TECH)-\d+$/i)) {
     return segment.toUpperCase();
+  }
+  // Check if this looks like a UUID - truncate it
+  if (segment.match(/^[0-9a-f]{8}-[0-9a-f]{4}/i)) {
+    // Show truncated UUID for technicians and other entities
+    return `${segment.substring(0, 8)}...`;
   }
   return null;
 };
