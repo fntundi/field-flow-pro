@@ -938,6 +938,104 @@ class CustomerEquipmentCreate(BaseModel):
     warranty_terms: Optional[str] = None
     notes: Optional[str] = None
 
+# ==================== SITES (RFC-002 Multi-Site Locations) ====================
+
+class SiteContact(BaseModel):
+    """Contact person at a site"""
+    name: str
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    role: Optional[str] = None  # e.g., "Property Manager", "Building Engineer", "Owner"
+    is_primary: bool = False
+    notes: Optional[str] = None
+
+class Site(BaseModel):
+    """Service location/site - can have multiple jobs over time"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    
+    # Relationship
+    customer_id: str
+    customer_name: Optional[str] = None  # Denormalized for display
+    
+    # Site identification
+    name: str  # e.g., "Main Office", "Warehouse B", "Johnson Residence"
+    site_type: Literal["residential", "commercial", "industrial", "multi-family"] = "residential"
+    
+    # Address
+    address: str
+    city: Optional[str] = None
+    state: Optional[str] = None
+    zip_code: Optional[str] = None
+    
+    # Access information
+    access_instructions: Optional[str] = None  # e.g., "Use side entrance, call on arrival"
+    gate_code: Optional[str] = None
+    key_location: Optional[str] = None
+    parking_notes: Optional[str] = None
+    building_hours: Optional[str] = None  # e.g., "Mon-Fri 8am-6pm"
+    
+    # Contacts at this site
+    contacts: List[SiteContact] = []
+    
+    # Equipment at this site (references to CustomerEquipment)
+    equipment_ids: List[str] = []
+    
+    # Service history summary
+    total_jobs: int = 0
+    last_service_date: Optional[str] = None
+    
+    # Location (for mapping)
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    
+    # Flags
+    is_active: bool = True
+    requires_appointment: bool = False
+    has_pets: bool = False
+    pet_notes: Optional[str] = None
+    
+    notes: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class SiteCreate(BaseModel):
+    customer_id: str
+    name: str
+    site_type: Literal["residential", "commercial", "industrial", "multi-family"] = "residential"
+    address: str
+    city: Optional[str] = None
+    state: Optional[str] = None
+    zip_code: Optional[str] = None
+    access_instructions: Optional[str] = None
+    gate_code: Optional[str] = None
+    key_location: Optional[str] = None
+    parking_notes: Optional[str] = None
+    building_hours: Optional[str] = None
+    contacts: List[SiteContact] = []
+    requires_appointment: bool = False
+    has_pets: bool = False
+    pet_notes: Optional[str] = None
+    notes: Optional[str] = None
+
+class SiteUpdate(BaseModel):
+    name: Optional[str] = None
+    site_type: Optional[Literal["residential", "commercial", "industrial", "multi-family"]] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    zip_code: Optional[str] = None
+    access_instructions: Optional[str] = None
+    gate_code: Optional[str] = None
+    key_location: Optional[str] = None
+    parking_notes: Optional[str] = None
+    building_hours: Optional[str] = None
+    contacts: Optional[List[SiteContact]] = None
+    requires_appointment: Optional[bool] = None
+    has_pets: Optional[bool] = None
+    pet_notes: Optional[str] = None
+    notes: Optional[str] = None
+    is_active: Optional[bool] = None
+
 # ==================== SYSTEM SETTINGS (RFC-002 Google Maps Toggle) ====================
 
 class SystemSettings(BaseModel):
