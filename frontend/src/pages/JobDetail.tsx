@@ -23,7 +23,7 @@ import {
   Mail,
   MessageSquare,
 } from "lucide-react";
-import { jobsApi, tasksApi, boardConfigApi, techniciansApi, Job, Task, BoardConfig, StatusColumn, Technician } from "@/lib/api";
+import { jobsApi, tasksApi, boardConfigApi, techniciansApi, voipApi, Job, Task, BoardConfig, StatusColumn, Technician } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
 const JobDetail = () => {
