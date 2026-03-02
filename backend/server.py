@@ -3547,7 +3547,7 @@ async def get_leads(
         ]
     
     leads = await db.leads.find(query).sort("created_at", -1).skip(offset).limit(limit).to_list(limit)
-    return [Lead(**l) for l in leads]
+    return [Lead(**lead) for lead in leads]
 
 @api_router.get("/leads/metrics")
 async def get_lead_metrics():
