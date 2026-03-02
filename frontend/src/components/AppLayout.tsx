@@ -2,6 +2,7 @@ import { ReactNode, useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import AppSidebar from "./AppSidebar";
 import Breadcrumbs from "./Breadcrumbs";
+import { PWAInstallBanner } from "./PWAInstallBanner";
 import { Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
