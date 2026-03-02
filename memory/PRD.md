@@ -81,6 +81,21 @@ Build a modern HVAC field service management system per RFC-002 with comprehensi
   - Push notification subscription toggle for current device
   - Browser permission status with help text
 
+### Sites Management (RFC-002 Multi-Site Locations) - NEW
+- [x] **Site Model** - Full data model with contacts, access codes, equipment links
+- [x] **Sites CRUD API** - Create, read, update, delete (soft) endpoints
+- [x] **Sites Migration** - Auto-create sites from existing job addresses
+- [x] **Sites Page UI** - Stats cards, site cards grid, search/filter
+- [x] **Site Detail Sheet** - Tabs for Info, Jobs history, Equipment
+- [x] **Customers API** - New /api/customers endpoint for customer lookup
+
+### Projects Page (RFC-002 Install Projects) - NEW
+- [x] **Projects List Page** - Stats cards, project cards with progress/timeline
+- [x] **Project Cards** - Show status, customer, progress bar, days, phases, budget
+- [x] **Project Status Actions** - Dropdown menu to change status (Planning → Scheduled → In Progress → Completed)
+- [x] **Create Project Dialog** - Link to job, set dates, hours, cost estimates
+- [x] **Gantt Chart Link** - Navigate to existing Gantt view for each project
+
 ### Install Project Billing (RFC-002 Section 4.5.3)
 - [x] **Milestone Templates** - 4 predefined configurable templates
 - [x] **Template Management** - Create, edit, configure templates
