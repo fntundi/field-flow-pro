@@ -487,9 +487,33 @@ const Dashboard = () => {
               </SelectContent>
             </Select>
           </div>
+          
+          {/* Mobile View Toggle for Technician */}
+          {role === "technician" && (
+            <Button
+              variant={mobileView ? "default" : "outline"}
+              size="sm"
+              onClick={() => setMobileView(!mobileView)}
+              className="gap-2"
+            >
+              <Smartphone className="w-4 h-4" />
+              {mobileView ? "Desktop" : "Mobile"}
+            </Button>
+          )}
         </div>
       </div>
 
+      {/* Mobile Technician Dashboard */}
+      {role === "technician" && mobileView && selectedTechId && (
+        <TechnicianMobileDashboard
+          technicianId={selectedTechId}
+          technicianName={technicians.find(t => t.id === selectedTechId)?.name || "Technician"}
+        />
+      )}
+
+      {/* Regular Dashboard Content - Hidden when mobile view is active */}
+      {!(role === "technician" && mobileView) && (
+        <>
       {/* AI Features Banner */}
       {aiEnabled && (
         <motion.div
