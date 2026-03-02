@@ -136,6 +136,7 @@ function AppRoutes() {
       <Route path="/inventory" element={<ProtectedRoute><AppLayout><InventoryManagement /></AppLayout></ProtectedRoute>} />
       <Route path="/analytics" element={<ProtectedRoute><AppLayout><Analytics /></AppLayout></ProtectedRoute>} />
       <Route path="/reports" element={<ProtectedRoute><AppLayout><ReportsBuilder /></AppLayout></ProtectedRoute>} />
+      <Route path="/communications" element={<ProtectedRoute><AppLayout><Communications /></AppLayout></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><AppLayout><Settings /></AppLayout></ProtectedRoute>} />
       <Route path="/import" element={<ProtectedRoute><AppLayout><ImportWizard /></AppLayout></ProtectedRoute>} />
       <Route path="*" element={<ProtectedRoute><AppLayout><NotFound /></AppLayout></ProtectedRoute>} />
