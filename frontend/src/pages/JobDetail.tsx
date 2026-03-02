@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { KanbanBoard } from "@/components/kanban";
+import { JobChat } from "@/components/JobChat";
 import {
   ArrowLeft,
   Phone,
@@ -20,6 +21,7 @@ import {
   Settings,
   Plus,
   Mail,
+  MessageSquare,
 } from "lucide-react";
 import { jobsApi, tasksApi, boardConfigApi, techniciansApi, Job, Task, BoardConfig, StatusColumn, Technician } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
