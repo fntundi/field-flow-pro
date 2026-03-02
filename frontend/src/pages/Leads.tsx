@@ -42,37 +42,33 @@ import {
   Target,
   MoreVertical,
   ArrowRight,
-  CheckCircle2,
-  XCircle,
-  AlertCircle,
-  FileText,
 } from "lucide-react";
-import { leadsApi, pcbsApi, Lead, PCB, LeadMetrics, PCBMetrics } from "@/lib/api";
+import { leadsApi, pcbsApi, Lead, PCB } from "@/lib/api";
 import { toast } from "sonner";
 
-const leadStatusConfig = {
+const leadStatusConfig: { [key: string]: { label: string; color: string } } = {
   new: { label: "New", color: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
   contacted: { label: "Contacted", color: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" },
   qualified: { label: "Qualified", color: "bg-purple-500/20 text-purple-400 border-purple-500/30" },
   quoted: { label: "Quoted", color: "bg-cyan-500/20 text-cyan-400 border-cyan-500/30" },
   won: { label: "Won", color: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" },
   lost: { label: "Lost", color: "bg-red-500/20 text-red-400 border-red-500/30" },
-} as Record<string, { label: string; color: string }>;
+};
 
-const pcbStatusConfig = {
+const pcbStatusConfig: { [key: string]: { label: string; color: string } } = {
   created: { label: "Created", color: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
   assigned: { label: "Assigned", color: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" },
   follow_up: { label: "Follow Up", color: "bg-purple-500/20 text-purple-400 border-purple-500/30" },
   converted: { label: "Converted", color: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" },
   closed: { label: "Closed", color: "bg-slate-500/20 text-slate-400 border-slate-500/30" },
-} as Record<string, { label: string; color: string }>;
+};
 
-const priorityConfig = {
+const priorityConfig: { [key: string]: { label: string; color: string } } = {
   low: { label: "Low", color: "bg-slate-500/20 text-slate-400" },
   normal: { label: "Normal", color: "bg-blue-500/20 text-blue-400" },
   high: { label: "High", color: "bg-orange-500/20 text-orange-400" },
   urgent: { label: "Urgent", color: "bg-red-500/20 text-red-400" },
-} as Record<string, { label: string; color: string }>;
+};
 
 const sourceOptions = [
   { value: "website", label: "Website" },
@@ -279,8 +275,8 @@ export default function Leads() {
                   <Input id="follow_up_date" name="follow_up_date" type="date" />
                 </div>
                 <div>
-                  <Label htmlFor="notes">Notes</Label>
-                  <Textarea id="notes" name="notes" placeholder="Additional notes..." />
+                  <Label htmlFor="pcb_notes">Notes</Label>
+                  <Textarea id="pcb_notes" name="notes" placeholder="Additional notes..." />
                 </div>
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setShowNewPCBDialog(false)}>
@@ -360,7 +356,7 @@ export default function Leads() {
                     </Select>
                   </div>
                   <div>
-                    <Label htmlFor="priority">Priority</Label>
+                    <Label htmlFor="lead_priority">Priority</Label>
                     <Select name="priority" defaultValue="normal">
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -377,8 +373,8 @@ export default function Leads() {
                   </div>
                 </div>
                 <div>
-                  <Label htmlFor="notes">Notes</Label>
-                  <Textarea id="notes" name="notes" placeholder="Additional information about this lead..." />
+                  <Label htmlFor="lead_notes">Notes</Label>
+                  <Textarea id="lead_notes" name="notes" placeholder="Additional information about this lead..." />
                 </div>
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setShowNewLeadDialog(false)}>
