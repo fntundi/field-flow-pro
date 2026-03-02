@@ -6567,7 +6567,8 @@ async def link_equipment_to_site(site_id: str, equipment_id: str):
 async def migrate_sites_from_jobs():
     """
     Auto-create sites from existing job addresses.
-    Groups jobs by customer_id + address to create unique sites.
+    Groups jobs by customer_name + address to create unique sites.
+    Falls back to customer_name when customer_id is not available.
     """
     # Get all jobs with addresses
     jobs = await db.jobs.find({
@@ -6577,22 +6578,26 @@ async def migrate_sites_from_jobs():
     if not jobs:
         return {"message": "No jobs found to migrate", "sites_created": 0}
     
-    # Group by customer_id + normalized address
+    # Group by customer identifier (customer_id or customer_name) + normalized address
     site_map = {}
     for job in jobs:
         customer_id = job.get("customer_id")
+        customer_name = job.get("customer_name", "Unknown Customer")
         address = job.get("site_address", "").strip()
         
-        if not customer_id or not address:
+        if not address:
             continue
         
+        # Use customer_id if available, otherwise use customer_name as identifier
+        customer_key = customer_id if customer_id else customer_name.lower().strip()
+        
         # Create a key for grouping
-        key = f"{customer_id}|{address.lower()}"
+        key = f"{customer_key}|{address.lower()}"
         
         if key not in site_map:
             site_map[key] = {
                 "customer_id": customer_id,
-                "customer_name": job.get("customer_name"),
+                "customer_name": customer_name,
                 "address": address,
                 "city": job.get("site_city"),
                 "state": job.get("site_state"),
