@@ -71,6 +71,11 @@ from models import (
     Site, SiteCreate, SiteUpdate, SiteContact,
     SystemSettings,
 )
+from voip_models import (
+    VoIPCallLog, VoIPSMS, VoIPPhoneNumber, VoIPSettings,
+    CallInitiateRequest, SMSSendRequest, CallAnalytics,
+)
+from voip_service import phone_com_service
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
