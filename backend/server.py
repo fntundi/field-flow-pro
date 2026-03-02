@@ -7,10 +7,11 @@ import os
 import logging
 import re
 import base64
+import math
 from pathlib import Path
 from typing import List, Optional
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from models import (
     User, UserCreate, UserResponse,
@@ -21,6 +22,9 @@ from models import (
     Job, JobCreate, JobUpdate,
     Appointment, AppointmentCreate, AppointmentConfirmation,
     ImageUploadRequest, ImageUploadResponse,
+    # Time tracking models
+    GeoLocation, TimeEntry, TimeEntryCreate, ShiftSession, 
+    JobTimeEntry, JobTimeEntryCreate, TechnicianMetrics, RouteEstimate,
 )
 
 ROOT_DIR = Path(__file__).parent
