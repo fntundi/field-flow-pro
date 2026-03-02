@@ -49,13 +49,14 @@ class TestPushNotificationEndpoints:
     
     @pytest.fixture
     def auth_token(self):
-        """Get auth token via demo login"""
-        response = requests.post(f"{BASE_URL}/api/auth/demo-login", json={
-            "role": "admin"
+        """Get auth token via login"""
+        response = requests.post(f"{BASE_URL}/api/auth/login", json={
+            "email": "test@test.com",
+            "password": "test123"
         })
         if response.status_code == 200:
-            return response.json().get("token")
-        pytest.skip("Demo login failed - skipping authenticated tests")
+            return response.json().get("access_token")
+        pytest.skip("Login failed - skipping authenticated tests")
     
     @pytest.fixture
     def auth_headers(self, auth_token):
@@ -127,13 +128,14 @@ class TestSystemSettingsPushConfig:
     
     @pytest.fixture
     def auth_token(self):
-        """Get auth token via demo login"""
-        response = requests.post(f"{BASE_URL}/api/auth/demo-login", json={
-            "role": "admin"
+        """Get auth token via login"""
+        response = requests.post(f"{BASE_URL}/api/auth/login", json={
+            "email": "test@test.com",
+            "password": "test123"
         })
         if response.status_code == 200:
-            return response.json().get("token")
-        pytest.skip("Demo login failed - skipping authenticated tests")
+            return response.json().get("access_token")
+        pytest.skip("Login failed - skipping authenticated tests")
     
     @pytest.fixture
     def auth_headers(self, auth_token):
