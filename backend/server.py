@@ -25,6 +25,17 @@ from models import (
     # Time tracking models
     GeoLocation, TimeEntry, TimeEntryCreate, ShiftSession, 
     JobTimeEntry, JobTimeEntryCreate, TechnicianMetrics, RouteEstimate,
+    # Inventory models
+    InventoryCategory, InventoryCategoryCreate,
+    InventoryItem, InventoryItemCreate, InventoryItemUpdate,
+    TruckInventory, TruckInventoryItem, TruckStockCheck, TruckStockCheckCreate,
+    RestockRequest, RestockRequestCreate,
+    JobEquipmentUsage, JobEquipmentApproval, InventoryAuditLog,
+    # J-Load models
+    JLoadQuickEstimate, JLoadQuickEstimateCreate,
+    ManualJLoadCalculation, ManualJLoadCreate,
+    # Truck models
+    Truck, TruckCreate, TruckUpdate,
 )
 
 ROOT_DIR = Path(__file__).parent
