@@ -2822,7 +2822,7 @@ Keep response focused and actionable."""
 
     try:
         session_id = f"maintenance-{str(uuid.uuid4())[:8]}"
-        response = get_gemini_response(prompt, session_id)
+        response = await get_gemini_response(prompt, session_id)
         return {
             "predictions": response,
             "ai_model": "gemini-2.0-flash"
