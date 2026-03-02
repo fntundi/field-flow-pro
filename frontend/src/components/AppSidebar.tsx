@@ -60,6 +60,13 @@ interface AppSidebarProps {
 const AppSidebar = ({ isOpen = true, isMobile = false, onClose }: AppSidebarProps) => {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+
+  const handleLogout = () => {
+    logout();
+    navigate("/login");
+  };
 
   // Close mobile sidebar on navigation
   useEffect(() => {
