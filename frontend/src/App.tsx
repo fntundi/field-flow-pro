@@ -34,6 +34,7 @@ import Login from "@/pages/Login";
 import ImportWizard from "@/pages/ImportWizard";
 import Checklists from "@/pages/Checklists";
 import ReportsBuilder from "@/pages/ReportsBuilder";
+import SchedulingBoard from "@/pages/SchedulingBoard";
 import { Loader2 } from "lucide-react";
 
 const queryClient = new QueryClient();
