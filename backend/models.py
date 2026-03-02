@@ -950,6 +950,28 @@ class SystemSettings(BaseModel):
     
     # AI features toggle
     ai_features_enabled: bool = False
+    ai_provider: Literal["gemini", "openai", "claude"] = "gemini"
+    ai_model: str = "gemini-2.0-flash"
+    ai_failover_enabled: bool = True  # Failover to simple summaries if AI fails
+    
+    # QuickBooks integration toggle
+    quickbooks_enabled: bool = False
+    quickbooks_configured: bool = False
+    quickbooks_sync_invoices: bool = True
+    quickbooks_sync_payments: bool = True
+    quickbooks_sync_customers: bool = True
+    quickbooks_last_sync: Optional[datetime] = None
+    
+    # Push notifications
+    push_notifications_enabled: bool = True
+    push_vapid_public_key: Optional[str] = None
+    push_vapid_private_key: Optional[str] = None
+    
+    # Notification triggers
+    notify_on_chat_message: bool = True
+    notify_on_job_assignment: bool = True
+    notify_on_schedule_change: bool = True
+    notify_on_payment_received: bool = True
     
     # Default tax rate
     default_tax_rate: float = 0
