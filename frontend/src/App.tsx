@@ -31,6 +31,7 @@ import MaintenanceAgreements from "@/pages/MaintenanceAgreements";
 import Proposals from "@/pages/Proposals";
 import Settings from "@/pages/Settings";
 import Login from "@/pages/Login";
+import ImportWizard from "@/pages/ImportWizard";
 import { Loader2 } from "lucide-react";
 
 const queryClient = new QueryClient();
