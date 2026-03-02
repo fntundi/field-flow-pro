@@ -2087,7 +2087,8 @@ async def calculate_quick_estimate(data: JLoadQuickEstimateCreate, technician_id
     window_factor = WINDOW_FACTORS.get(data.window_type, 1.0)
     
     # Base calculation
-    volume = data.square_footage * data.ceiling_height * data.num_floors
+    # Volume is calculated inline below
+    # volume = data.square_footage * data.ceiling_height * data.num_floors
     window_load = data.num_windows * 1000 * window_factor  # ~1000 BTU per window adjusted
     
     # Cooling calculation (BTU/hr)
