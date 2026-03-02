@@ -2325,3 +2325,32 @@ export const reportsApi = {
       body: JSON.stringify(data),
     }),
 };
+
+// ==================== PAYMENTS API ====================
+
+export interface CheckoutSession {
+  checkout_url: string;
+  session_id: string;
+}
+
+export interface CheckoutStatus {
+  status: string;
+  payment_status: string;
+  amount_total: number;
+  currency: string;
+  metadata: Record<string, string>;
+}
+
+export const paymentsApi = {
+  createCheckoutSession: (invoiceId: string) =>
+    fetchApi<CheckoutSession>('/payments/checkout/create', {
+      method: 'POST',
+      body: JSON.stringify({
+        invoice_id: invoiceId,
+        origin_url: window.location.origin,
+      }),
+    }),
+  
+  getCheckoutStatus: (sessionId: string) =>
+    fetchApi<CheckoutStatus>(`/payments/checkout/status/${sessionId}`),
+};
