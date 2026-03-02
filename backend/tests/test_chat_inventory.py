@@ -31,7 +31,9 @@ def auth_token(api_client):
     
     if response.status_code == 200:
         data = response.json()
-        return data.get("token")
+        token = data.get("access_token") or data.get("token")
+        if token:
+            return token
     
     # If login fails, try to register first
     register_response = api_client.post(f"{BASE_URL}/api/auth/register", json={
@@ -43,7 +45,9 @@ def auth_token(api_client):
     
     if register_response.status_code == 200:
         data = register_response.json()
-        return data.get("token")
+        token = data.get("access_token") or data.get("token")
+        if token:
+            return token
     
     # Try login again after registration
     response = api_client.post(f"{BASE_URL}/api/auth/login", json={
@@ -53,7 +57,9 @@ def auth_token(api_client):
     
     if response.status_code == 200:
         data = response.json()
-        return data.get("token")
+        token = data.get("access_token") or data.get("token")
+        if token:
+            return token
     
     pytest.skip("Authentication failed - skipping authenticated tests")
 
