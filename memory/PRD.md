@@ -96,6 +96,24 @@ Build a modern HVAC field service management system per RFC-002 with comprehensi
 - [x] **Create Project Dialog** - Link to job, set dates, hours, cost estimates
 - [x] **Gantt Chart Link** - Navigate to existing Gantt view for each project
 
+### VoIP Integration (Phone.com) - NEW
+- [x] **VoIP Models** - VoIPCallLog, VoIPSMS, VoIPPhoneNumber, VoIPSettings
+- [x] **Phone.com Service** - Service class with API integration (make_call, send_sms, get_call_logs, etc.)
+- [x] **VoIP API Endpoints** - /api/voip/status, calls, sms, analytics, webhooks
+- [x] **Demo Mode** - Full functionality with simulated calls when not configured
+- [x] **Communications Page** - Call logs table, SMS messages, analytics dashboard
+- [x] **Click-to-Call** - Initiate calls with customer/job linking
+- [x] **SMS Messaging** - Send/receive SMS with customer auto-matching
+- [x] **Call Analytics** - Stats cards, calls by status, calls by hour chart
+- [x] **Webhook Endpoints** - Receive call/SMS events from Phone.com
+- [x] **Settings Integration** - VoIP configuration section with feature toggles
+- [x] **Seed Data** - 8 demo calls, 3 demo SMS for testing
+
+### Backend Refactoring - IN PROGRESS
+- [x] **Routes Directory Structure** - Created /app/backend/routes/ with modular files
+- [x] **Shared Utilities** - Created shared.py with DB, auth, and validation helpers
+- [ ] **Route Migration** - Incrementally move routes from server.py to modules
+
 ### Install Project Billing (RFC-002 Section 4.5.3)
 - [x] **Milestone Templates** - 4 predefined configurable templates
 - [x] **Template Management** - Create, edit, configure templates
