@@ -353,6 +353,148 @@ export const appointmentsApi = {
     }),
 };
 
+// ==================== TIME TRACKING API ====================
+
+export interface GeoLocation {
+  latitude: number;
+  longitude: number;
+  address?: string;
+  accuracy?: number;
+}
+
+export interface ShiftSession {
+  id: string;
+  technician_id: string;
+  shift_start: string;
+  shift_start_location?: GeoLocation;
+  shift_end?: string;
+  shift_end_location?: GeoLocation;
+  total_shift_minutes?: number;
+  jobs_completed: number;
+  status: 'active' | 'completed';
+  created_at: string;
+}
+
+export interface JobTimeEntry {
+  id: string;
+  technician_id: string;
+  job_id: string;
+  job_number?: string;
+  job_type?: string;
+  shift_session_id?: string;
+  dispatch_time?: string;
+  dispatch_location?: GeoLocation;
+  estimated_travel_minutes?: number;
+  estimated_route_distance_miles?: number;
+  job_start?: string;
+  job_start_location?: GeoLocation;
+  actual_travel_minutes?: number;
+  job_end?: string;
+  job_end_location?: GeoLocation;
+  actual_job_minutes?: number;
+  travel_variance_minutes?: number;
+  status: 'dispatched' | 'traveling' | 'on_site' | 'completed' | 'cancelled';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TechnicianMetrics {
+  technician_id: string;
+  technician_name: string;
+  avg_travel_minutes: number;
+  total_travel_minutes: number;
+  travel_entries_count: number;
+  travel_variance_avg: number;
+  avg_job_minutes_residential_repair: number;
+  avg_job_minutes_commercial_repair: number;
+  avg_job_minutes_residential_install: number;
+  avg_job_minutes_commercial_install: number;
+  avg_job_minutes_maintenance: number;
+  avg_job_minutes_emergency: number;
+  total_jobs_tracked: number;
+  total_job_minutes: number;
+  jobs_on_time_percentage: number;
+  recent_avg_travel_minutes: number;
+  recent_travel_variance: number;
+  last_updated: string;
+}
+
+export const timeTrackingApi = {
+  // Shift management
+  startShift: (technicianId: string, location?: GeoLocation) =>
+    fetchApi<{ message: string; session_id: string; shift_start: string; location_captured: boolean }>(
+      `/time-tracking/shift/start?technician_id=${technicianId}`,
+      {
+        method: 'POST',
+        body: location ? JSON.stringify(location) : undefined,
+      }
+    ),
+  
+  endShift: (technicianId: string, location?: GeoLocation) =>
+    fetchApi<{ message: string; session_id: string; total_shift_hours: number; jobs_completed: number }>(
+      `/time-tracking/shift/end?technician_id=${technicianId}`,
+      {
+        method: 'POST',
+        body: location ? JSON.stringify(location) : undefined,
+      }
+    ),
+  
+  getActiveShift: (technicianId: string) =>
+    fetchApi<{ active: boolean; session: ShiftSession | null }>(`/time-tracking/shift/active/${technicianId}`),
+  
+  // Job time tracking
+  dispatchToJob: (technicianId: string, jobId: string, location?: GeoLocation) =>
+    fetchApi<{ message: string; entry_id: string; job_number: string; estimated_travel_minutes?: number; estimated_distance_miles?: number }>(
+      '/time-tracking/job/dispatch',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          technician_id: technicianId,
+          job_id: jobId,
+          dispatch_location: location,
+        }),
+      }
+    ),
+  
+  arriveAtJob: (entryId: string, location?: GeoLocation) =>
+    fetchApi<{ message: string; actual_travel_minutes: number; estimated_travel_minutes?: number; travel_variance_minutes?: number }>(
+      `/time-tracking/job/arrive/${entryId}`,
+      {
+        method: 'POST',
+        body: location ? JSON.stringify(location) : undefined,
+      }
+    ),
+  
+  completeJob: (entryId: string, location?: GeoLocation, notes?: string) =>
+    fetchApi<{ message: string; actual_job_minutes: number; actual_job_hours: number; travel_minutes?: number }>(
+      `/time-tracking/job/complete/${entryId}?${notes ? `notes=${encodeURIComponent(notes)}` : ''}`,
+      {
+        method: 'POST',
+        body: location ? JSON.stringify(location) : undefined,
+      }
+    ),
+  
+  getActiveJobEntry: (technicianId: string) =>
+    fetchApi<{ active: boolean; entry: JobTimeEntry | null }>(`/time-tracking/job/active/${technicianId}`),
+  
+  // Metrics
+  getTechnicianMetrics: (technicianId: string) =>
+    fetchApi<TechnicianMetrics>(`/time-tracking/metrics/${technicianId}`),
+  
+  getHistory: (technicianId: string, days: number = 30) =>
+    fetchApi<{ job_entries: JobTimeEntry[]; shifts: ShiftSession[] }>(`/time-tracking/history/${technicianId}?days=${days}`),
+  
+  // Route estimation
+  estimateRoute: (origin: GeoLocation, destination: GeoLocation) =>
+    fetchApi<{ origin: GeoLocation; destination: GeoLocation; estimated_minutes: number; estimated_miles: number; route_count: number; confidence: string }>(
+      '/time-tracking/route-estimate',
+      {
+        method: 'POST',
+        body: JSON.stringify({ origin, destination }),
+      }
+    ),
+};
+
 // ==================== SEED API ====================
 
 export const seedApi = {
