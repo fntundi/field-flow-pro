@@ -95,9 +95,9 @@ class TestRoles:
         roles = response.json()
         assert isinstance(roles, list), "Expected list of roles"
         
-        # Check for expected system roles
+        # Check for expected system roles per RFC-002 DEFAULT_ROLES
         role_names = [r["name"] for r in roles]
-        expected_roles = ["admin", "owner", "office_manager", "dispatcher", "technician", "sales", "accounting", "customer"]
+        expected_roles = ["admin", "owner", "manager", "dispatcher", "technician", "lead_tech", "accountant", "sales"]
         
         for expected in expected_roles:
             assert expected in role_names, f"Missing expected role: {expected}"
