@@ -41,32 +41,30 @@ const App = () => (
           <Route path="/appointment/:token" element={<AppointmentConfirmation />} />
           
           {/* Main App Routes - With AppLayout */}
-          <Route element={<AppLayout><Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/call-intake" element={<CallIntake />} />
-            <Route path="/jobs" element={<Jobs />} />
-            <Route path="/jobs/:id" element={<JobDetail />} />
-            <Route path="/projects/:projectId" element={<GanttChart />} />
-            <Route path="/projects" element={<PlaceholderPage title="Projects" subtitle="Multi-day install projects and phases" />} />
-            <Route path="/sales" element={<PlaceholderPage title="Sales" subtitle="Quotes, proposals, and close tracking" />} />
-            <Route path="/estimates" element={<Estimates />} />
-            <Route path="/dispatch" element={<Dispatch />} />
-            <Route path="/leads" element={<Leads />} />
-            <Route path="/customers" element={<Customers />} />
-            <Route path="/sites" element={<PlaceholderPage title="Sites" subtitle="Multi-site locations and access instructions" />} />
-            <Route path="/technicians" element={<Technicians />} />
-            <Route path="/technicians/:id" element={<TechnicianDetail />} />
-            <Route path="/schedule" element={<Schedule />} />
-            <Route path="/maintenance" element={<MaintenanceSchedules />} />
-            <Route path="/maintenance-agreements" element={<MaintenanceAgreements />} />
-            <Route path="/checklists" element={<PlaceholderPage title="Checklists" subtitle="Installation evidence and quality verification" />} />
-            <Route path="/agreements" element={<ServiceAgreements />} />
-            <Route path="/invoices" element={<Invoices />} />
-            <Route path="/inventory" element={<Inventory />} />
-            <Route path="/analytics" element={<Analytics />} />
-            <Route path="/settings" element={<PlaceholderPage title="Settings" subtitle="Roles, permissions, and system configuration" />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes></AppLayout>} />
+          <Route path="/" element={<AppLayout><Dashboard /></AppLayout>} />
+          <Route path="/call-intake" element={<AppLayout><CallIntake /></AppLayout>} />
+          <Route path="/jobs" element={<AppLayout><Jobs /></AppLayout>} />
+          <Route path="/jobs/:id" element={<AppLayout><JobDetail /></AppLayout>} />
+          <Route path="/projects/:projectId" element={<AppLayout><GanttChart /></AppLayout>} />
+          <Route path="/projects" element={<AppLayout><PlaceholderPage title="Projects" subtitle="Multi-day install projects and phases" /></AppLayout>} />
+          <Route path="/sales" element={<AppLayout><PlaceholderPage title="Sales" subtitle="Quotes, proposals, and close tracking" /></AppLayout>} />
+          <Route path="/estimates" element={<AppLayout><Estimates /></AppLayout>} />
+          <Route path="/dispatch" element={<AppLayout><Dispatch /></AppLayout>} />
+          <Route path="/leads" element={<AppLayout><Leads /></AppLayout>} />
+          <Route path="/customers" element={<AppLayout><Customers /></AppLayout>} />
+          <Route path="/sites" element={<AppLayout><PlaceholderPage title="Sites" subtitle="Multi-site locations and access instructions" /></AppLayout>} />
+          <Route path="/technicians" element={<AppLayout><Technicians /></AppLayout>} />
+          <Route path="/technicians/:id" element={<AppLayout><TechnicianDetail /></AppLayout>} />
+          <Route path="/schedule" element={<AppLayout><Schedule /></AppLayout>} />
+          <Route path="/maintenance" element={<AppLayout><MaintenanceSchedules /></AppLayout>} />
+          <Route path="/maintenance-agreements" element={<AppLayout><MaintenanceAgreements /></AppLayout>} />
+          <Route path="/checklists" element={<AppLayout><PlaceholderPage title="Checklists" subtitle="Installation evidence and quality verification" /></AppLayout>} />
+          <Route path="/agreements" element={<AppLayout><ServiceAgreements /></AppLayout>} />
+          <Route path="/invoices" element={<AppLayout><Invoices /></AppLayout>} />
+          <Route path="/inventory" element={<AppLayout><Inventory /></AppLayout>} />
+          <Route path="/analytics" element={<AppLayout><Analytics /></AppLayout>} />
+          <Route path="/settings" element={<AppLayout><PlaceholderPage title="Settings" subtitle="Roles, permissions, and system configuration" /></AppLayout>} />
+          <Route path="*" element={<AppLayout><NotFound /></AppLayout>} />
         </Routes>
       </BrowserRouter>
     </TooltipProvider>
