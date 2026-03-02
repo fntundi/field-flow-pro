@@ -19,6 +19,7 @@ import {
   Wrench,
   X,
   PhoneIncoming,
+  PhoneCall,
   Building2,
   FolderKanban,
   LogOut,
