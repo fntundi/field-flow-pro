@@ -8,10 +8,13 @@ import logging
 import re
 import base64
 import math
+import hashlib
+import secrets
 from pathlib import Path
 from typing import List, Optional
 import uuid
 from datetime import datetime, timedelta
+import googlemaps
 
 from models import (
     User, UserCreate, UserResponse,
@@ -36,6 +39,17 @@ from models import (
     ManualJLoadCalculation, ManualJLoadCreate,
     # Truck models
     Truck, TruckCreate, TruckUpdate,
+    # Routing & Maps
+    RouteCalculation, RouteRequest,
+    # Maintenance Agreements
+    MaintenanceAgreementTemplate, MaintenanceAgreement, MaintenanceAgreementCreate,
+    # Gantt / Project Management
+    ProjectPhase, InstallProject, InstallProjectCreate, ProjectPhaseCreate,
+    # Customer Portal
+    CustomerAccount, CustomerAccountCreate, CustomerLogin, MagicLinkRequest,
+    ServiceRequest, ServiceRequestCreate,
+    # Offline Sync
+    OfflineSyncQueue, SyncBatch, ConflictResolution, SyncStatus,
 )
 
 ROOT_DIR = Path(__file__).parent
