@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import MetricCard from "@/components/MetricCard";
+import { Link } from "react-router-dom";
 import { DollarSign, TrendingUp, Users, Clock, Target, BarChart3, Percent, ArrowUpRight } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -53,10 +54,10 @@ const Analytics = () => {
 
       {/* Top KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard title="Gross Margin" value="44.7%" change="+2.1% vs last month" changeType="positive" icon={Percent} index={0} />
-        <MetricCard title="Avg. Ticket" value="$371" change="+$24 vs last month" changeType="positive" icon={DollarSign} index={1} />
-        <MetricCard title="Lead Conversion" value="64%" change="+5% improvement" changeType="positive" icon={Target} index={2} />
-        <MetricCard title="DSO (Days Sales)" value="28 days" change="-3 days improvement" changeType="positive" icon={Clock} index={3} />
+        <MetricCard title="Gross Margin" value="44.7%" change="+2.1% vs last month" changeType="positive" icon={Percent} index={0} href="/invoices" />
+        <MetricCard title="Avg. Ticket" value="$371" change="+$24 vs last month" changeType="positive" icon={DollarSign} index={1} href="/invoices" />
+        <MetricCard title="Lead Conversion" value="64%" change="+5% improvement" changeType="positive" icon={Target} index={2} href="/leads" />
+        <MetricCard title="DSO (Days Sales)" value="28 days" change="-3 days improvement" changeType="positive" icon={Clock} index={3} href="/invoices" />
       </div>
 
       {/* Revenue & Expenses */}
@@ -103,8 +104,9 @@ const Analytics = () => {
 
       {/* Technician Performance */}
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="metric-card !p-0 overflow-hidden">
-        <div className="px-5 py-4 border-b border-border">
+        <div className="px-5 py-4 border-b border-border flex items-center justify-between">
           <h3 className="text-sm font-semibold text-foreground">Technician Performance (MTD)</h3>
+          <Link to="/technicians" className="text-xs text-accent hover:underline">View all →</Link>
         </div>
         <table className="data-table">
           <thead>
@@ -112,8 +114,8 @@ const Analytics = () => {
           </thead>
           <tbody>
             {techPerformance.map((tech) => (
-              <tr key={tech.name}>
-                <td className="font-medium">{tech.name}</td>
+              <tr key={tech.name} className="cursor-pointer">
+                <td><Link to="/technicians" className="font-medium hover:text-accent transition-colors">{tech.name}</Link></td>
                 <td>{tech.jobs}</td>
                 <td className="font-medium text-foreground">${tech.revenue.toLocaleString()}</td>
                 <td>⭐ {tech.rating}</td>
