@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { authApi, AuthUser } from '@/lib/api';
+import { toast } from 'sonner';
 
 interface AuthContextType {
   user: AuthUser | null;
@@ -18,6 +19,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const googleAuthProcessed = useRef(false);
 
   const login = useCallback((user: AuthUser, token: string) => {
     setUser(user);
@@ -38,7 +40,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('auth_user', JSON.stringify(updatedUser));
   }, []);
 
+  const handleGoogleCallback = useCallback(async () => {
+    // Prevent double processing
+    if (googleAuthProcessed.current) return false;
+    
+    // Check for Google OAuth callback
+    const urlParams = new URLSearchParams(window.location.search);
+    const sessionId = urlParams.get('session_id');
+    
+    if (!sessionId) return false;
+    
+    googleAuthProcessed.current = true;
+    
+    try {
+      const response = await authApi.googleSessionExchange(sessionId);
+      login(response.user, response.access_token);
+      
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+      
+      toast.success(`Welcome, ${response.user.name}!`);
+      return true;
+    } catch (error: any) {
+      console.error('Google auth error:', error);
+      toast.error(error?.message || 'Google authentication failed');
+      // Clean up URL even on error
+      window.history.replaceState({}, document.title, window.location.pathname);
+      return false;
+    }
+  }, [login]);
+
   const checkAuth = useCallback(async (): Promise<boolean> => {
+    // First check for Google OAuth callback
+    const googleAuthResult = await handleGoogleCallback();
+    if (googleAuthResult) {
+      setIsLoading(false);
+      return true;
+    }
+    
     const storedToken = localStorage.getItem('auth_token');
     const storedUser = localStorage.getItem('auth_user');
 
@@ -71,7 +110,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(false);
       return false;
     }
-  }, [logout]);
+  }, [handleGoogleCallback, logout]);
 
   // Check auth on mount
   useEffect(() => {
