@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -37,8 +37,13 @@ import {
   Sparkles,
   Settings,
   RefreshCw,
+  LogIn,
+  LogOut,
+  Car,
+  MapPinned,
+  Loader2,
 } from "lucide-react";
-import { jobsApi, techniciansApi, seedApi, Job, Technician } from "@/lib/api";
+import { jobsApi, techniciansApi, seedApi, timeTrackingApi, Job, Technician, GeoLocation, ShiftSession, JobTimeEntry } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
 // Role-based dashboard views (Section 8.1)
