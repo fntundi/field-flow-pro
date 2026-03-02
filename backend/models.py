@@ -2130,3 +2130,148 @@ class SyncStatus(BaseModel):
     failed_count: int = 0
     last_sync: Optional[datetime] = None
     conflicts: List[dict] = []  # List of unresolved conflicts
+
+
+# ==================== MILESTONE TEMPLATES ====================
+
+class BillingMilestone(BaseModel):
+    """Individual billing milestone within a template"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str  # e.g., "Deposit", "Rough-In Complete", "Final Payment"
+    percentage: float  # Percentage of total project cost
+    description: Optional[str] = None
+    trigger: Literal["manual", "phase_complete", "project_start", "project_complete"] = "manual"
+    trigger_phase_id: Optional[str] = None  # If trigger is phase_complete
+
+class MilestoneTemplate(BaseModel):
+    """Predefined template for billing milestones"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str  # e.g., "Standard Install 30/40/30"
+    description: Optional[str] = None
+    milestones: List[BillingMilestone] = []
+    is_default: bool = False
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class MilestoneTemplateCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    milestones: List[dict] = []  # [{name, percentage, description, trigger}]
+    is_default: bool = False
+
+class ProjectBillingMilestone(BaseModel):
+    """Actual billing milestone instance on a project"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    template_milestone_id: Optional[str] = None  # Reference to template
+    name: str
+    percentage: float
+    amount: float  # Calculated from project total
+    description: Optional[str] = None
+    
+    # Status
+    status: Literal["pending", "ready_to_bill", "invoiced", "paid"] = "pending"
+    
+    # Invoice linkage
+    invoice_id: Optional[str] = None
+    invoiced_at: Optional[datetime] = None
+    paid_at: Optional[datetime] = None
+    
+    # Trigger
+    trigger: str = "manual"
+    trigger_phase_id: Optional[str] = None
+    triggered_at: Optional[datetime] = None
+
+# ==================== RESCHEDULE REQUESTS ====================
+
+class RescheduleRequest(BaseModel):
+    """Customer request to reschedule an appointment"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    request_number: str = Field(default_factory=lambda: f"RSC-{str(uuid.uuid4())[:8].upper()}")
+    
+    # Job reference
+    job_id: str
+    job_number: str
+    
+    # Customer info
+    customer_id: str
+    customer_name: str
+    customer_email: str
+    customer_phone: Optional[str] = None
+    
+    # Original schedule
+    original_date: str
+    original_time: Optional[str] = None
+    
+    # Requested new schedule
+    requested_date: str
+    requested_time_preference: Optional[str] = None  # "morning", "afternoon", "evening", or specific time
+    
+    # Reason
+    reason: Optional[str] = None
+    
+    # Status
+    status: Literal["pending", "approved", "rejected", "cancelled"] = "pending"
+    
+    # Dispatcher response
+    approved_date: Optional[str] = None
+    approved_time: Optional[str] = None
+    rejection_reason: Optional[str] = None
+    processed_by_id: Optional[str] = None
+    processed_at: Optional[datetime] = None
+    
+    # Notes
+    notes: Optional[str] = None
+    
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class RescheduleRequestCreate(BaseModel):
+    job_id: str
+    requested_date: str
+    requested_time_preference: Optional[str] = None
+    reason: Optional[str] = None
+
+class SupportRequest(BaseModel):
+    """Customer support/service request from portal"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    request_number: str = Field(default_factory=lambda: f"SUP-{str(uuid.uuid4())[:8].upper()}")
+    
+    # Customer info
+    customer_id: str
+    customer_name: str
+    customer_email: str
+    
+    # Request details
+    request_type: Literal["service", "repair", "maintenance", "question", "complaint", "other"] = "service"
+    subject: str
+    description: str
+    
+    # Location
+    service_address: Optional[str] = None
+    
+    # Equipment (if applicable)
+    equipment_id: Optional[str] = None
+    equipment_type: Optional[str] = None
+    
+    # Urgency
+    priority: Literal["low", "normal", "high", "emergency"] = "normal"
+    
+    # Status
+    status: Literal["new", "reviewed", "scheduled", "in_progress", "resolved", "closed"] = "new"
+    
+    # Response
+    assigned_to_id: Optional[str] = None
+    job_id: Optional[str] = None  # If converted to job
+    response_notes: Optional[str] = None
+    
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class SupportRequestCreate(BaseModel):
+    request_type: str = "service"
+    subject: str
+    description: str
+    service_address: Optional[str] = None
+    equipment_id: Optional[str] = None
+    priority: str = "normal"
