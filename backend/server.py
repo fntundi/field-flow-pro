@@ -5469,15 +5469,17 @@ async def get_reports_summary():
 
 @api_router.post("/reports/query")
 async def query_reports(data: dict):
-    """Ad-hoc report query builder"""
-    entity = data.get("entity")  # jobs, leads, invoices, technicians
-    filters = data.get("filters", {})
+    """Ad-hoc report query builder - RFC-002 Section 4.8.2"""
+    data_source = data.get("data_source") or data.get("entity")
+    columns = data.get("columns", [])
+    filters = data.get("filters", [])
     group_by = data.get("group_by")
+    sort_by = data.get("sort_by")
+    sort_order = data.get("sort_order", "desc")
     date_range = data.get("date_range", {})
-    aggregations = data.get("aggregations", ["count"])
     
-    if not entity:
-        raise HTTPException(status_code=400, detail="Entity required")
+    if not data_source:
+        raise HTTPException(status_code=400, detail="data_source required")
     
     # Map entity to collection
     collection_map = {
@@ -5485,64 +5487,90 @@ async def query_reports(data: dict):
         "leads": db.leads,
         "invoices": db.invoices,
         "technicians": db.technicians,
+        "customers": db.customers,
+        "inventory": db.inventory_items,
         "pcbs": db.pcbs,
         "proposals": db.proposals,
     }
     
-    collection = collection_map.get(entity)
+    collection = collection_map.get(data_source)
     if not collection:
-        raise HTTPException(status_code=400, detail=f"Unknown entity: {entity}")
+        raise HTTPException(status_code=400, detail=f"Unknown data source: {data_source}")
     
     # Build query
     query = {}
     
     # Apply filters
-    for field, value in filters.items():
-        if isinstance(value, list):
-            query[field] = {"$in": value}
-        else:
+    for filter_item in filters:
+        field = filter_item.get("field")
+        operator = filter_item.get("operator", "equals")
+        value = filter_item.get("value")
+        
+        if not field or value is None:
+            continue
+            
+        if operator == "equals":
             query[field] = value
+        elif operator == "not_equals":
+            query[field] = {"$ne": value}
+        elif operator == "contains":
+            query[field] = {"$regex": value, "$options": "i"}
+        elif operator == "greater_than":
+            try:
+                query[field] = {"$gt": float(value)}
+            except ValueError:
+                query[field] = {"$gt": value}
+        elif operator == "less_than":
+            try:
+                query[field] = {"$lt": float(value)}
+            except ValueError:
+                query[field] = {"$lt": value}
     
     # Apply date range
     if date_range.get("start") or date_range.get("end"):
         date_query = {}
-        date_field = date_range.get("field", "created_at")
         if date_range.get("start"):
             date_query["$gte"] = datetime.fromisoformat(date_range["start"])
         if date_range.get("end"):
             date_query["$lte"] = datetime.fromisoformat(date_range["end"])
         if date_query:
-            query[date_field] = date_query
+            query["created_at"] = date_query
     
-    # Build aggregation pipeline
-    pipeline = [{"$match": query}]
+    # Build projection to include only requested columns
+    projection = {"_id": 0}
+    for col in columns:
+        projection[col] = 1
     
-    if group_by:
-        group_stage = {"_id": f"${group_by}"}
-        for agg in aggregations:
-            if agg == "count":
-                group_stage["count"] = {"$sum": 1}
-            elif agg == "sum" and data.get("sum_field"):
-                group_stage["sum"] = {"$sum": f"${data['sum_field']}"}
-            elif agg == "avg" and data.get("avg_field"):
-                group_stage["avg"] = {"$avg": f"${data['avg_field']}"}
-        pipeline.append({"$group": group_stage})
-        pipeline.append({"$sort": {"count": -1}})
-    else:
-        # Simple count
-        docs = await collection.find(query).to_list(1000)
-        return {
-            "count": len(docs),
-            "data": [{k: v for k, v in doc.items() if k != "_id"} for doc in docs[:100]]
-        }
+    # Build sort
+    sort_spec = []
+    if sort_by:
+        sort_direction = 1 if sort_order == "asc" else -1
+        sort_spec = [(sort_by, sort_direction)]
     
-    results = await collection.aggregate(pipeline).to_list(100)
+    # Execute query
+    cursor = collection.find(query, projection)
+    if sort_spec:
+        cursor = cursor.sort(sort_spec)
+    
+    results = await cursor.to_list(1000)
+    
+    # Calculate aggregations
+    aggregations = {}
+    if results:
+        aggregations["total_count"] = len(results)
+        
+        # Sum numeric fields
+        for col in columns:
+            if col in results[0] and isinstance(results[0].get(col), (int, float)):
+                total = sum(r.get(col, 0) or 0 for r in results)
+                aggregations[f"{col}_total"] = total
+                aggregations[f"{col}_avg"] = total / len(results) if results else 0
     
     return {
-        "entity": entity,
-        "filters": filters,
-        "group_by": group_by,
-        "results": results
+        "data_source": data_source,
+        "results": results,
+        "aggregations": aggregations,
+        "total_count": len(results)
     }
 
 # ==================== SEED DATA ====================
