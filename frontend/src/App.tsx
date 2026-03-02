@@ -108,7 +108,7 @@ function AppRoutes() {
       <Route path="/schedule" element={<ProtectedRoute><AppLayout><Schedule /></AppLayout></ProtectedRoute>} />
       <Route path="/maintenance" element={<ProtectedRoute><AppLayout><MaintenanceSchedules /></AppLayout></ProtectedRoute>} />
       <Route path="/maintenance-agreements" element={<ProtectedRoute><AppLayout><MaintenanceAgreements /></AppLayout></ProtectedRoute>} />
-      <Route path="/checklists" element={<ProtectedRoute><AppLayout><PlaceholderPage title="Checklists" subtitle="Installation evidence and quality verification" /></AppLayout></ProtectedRoute>} />
+      <Route path="/checklists" element={<ProtectedRoute><AppLayout><Checklists /></AppLayout></ProtectedRoute>} />
       <Route path="/agreements" element={<ProtectedRoute><AppLayout><ServiceAgreements /></AppLayout></ProtectedRoute>} />
       <Route path="/invoices" element={<ProtectedRoute><AppLayout><Invoices /></AppLayout></ProtectedRoute>} />
       <Route path="/vendors" element={<ProtectedRoute><AppLayout><Vendors /></AppLayout></ProtectedRoute>} />
