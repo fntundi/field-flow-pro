@@ -527,6 +527,244 @@ const Dashboard = () => {
         ))}
       </div>
 
+      {/* Technician Time Clock Section - Only for technician role */}
+      {role === "technician" && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25 }}
+          className="grid grid-cols-1 lg:grid-cols-2 gap-4"
+        >
+          {/* Shift Clock Card */}
+          <div className="metric-card border-2 border-blue-200 dark:border-blue-800">
+            <div className="flex items-center gap-2 mb-4">
+              <Clock className="w-5 h-5 text-blue-600" />
+              <h2 className="text-sm font-semibold text-foreground">Shift Time Clock</h2>
+              {activeShift && (
+                <Badge className="bg-green-100 text-green-700 border-green-300 ml-auto">
+                  On Shift
+                </Badge>
+              )}
+            </div>
+            
+            {!activeShift ? (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Clock in to start your shift. Your location will be recorded for travel analytics.
+                </p>
+                <Button
+                  onClick={handleStartShift}
+                  disabled={clockLoading || locationLoading}
+                  className="w-full bg-green-600 hover:bg-green-700"
+                  data-testid="shift-clock-in-btn"
+                >
+                  {clockLoading || locationLoading ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <LogIn className="w-4 h-4 mr-2" />
+                  )}
+                  Clock In for Shift
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Shift Started</p>
+                      <p className="font-medium text-foreground">
+                        {new Date(activeShift.shift_start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-muted-foreground">Duration</p>
+                      <p className="font-medium text-foreground">
+                        {(() => {
+                          const start = new Date(activeShift.shift_start);
+                          const now = new Date();
+                          const diff = Math.floor((now.getTime() - start.getTime()) / 60000);
+                          const hours = Math.floor(diff / 60);
+                          const mins = diff % 60;
+                          return `${hours}h ${mins}m`;
+                        })()}
+                      </p>
+                    </div>
+                  </div>
+                  {activeShift.shift_start_location && (
+                    <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
+                      <MapPin className="w-3 h-3" />
+                      Location recorded
+                    </div>
+                  )}
+                </div>
+                <Button
+                  onClick={handleEndShift}
+                  disabled={clockLoading || !!activeJobEntry}
+                  variant="destructive"
+                  className="w-full"
+                  data-testid="shift-clock-out-btn"
+                >
+                  {clockLoading ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <LogOut className="w-4 h-4 mr-2" />
+                  )}
+                  Clock Out from Shift
+                </Button>
+                {activeJobEntry && (
+                  <p className="text-xs text-amber-600 text-center">
+                    Complete your current job before ending shift
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Job Time Clock Card */}
+          <div className="metric-card border-2 border-orange-200 dark:border-orange-800">
+            <div className="flex items-center gap-2 mb-4">
+              <Briefcase className="w-5 h-5 text-orange-600" />
+              <h2 className="text-sm font-semibold text-foreground">Job Time Tracking</h2>
+              {activeJobEntry && (
+                <Badge className={`ml-auto ${
+                  activeJobEntry.status === "traveling" ? "bg-yellow-100 text-yellow-700 border-yellow-300" :
+                  "bg-blue-100 text-blue-700 border-blue-300"
+                }`}>
+                  {activeJobEntry.status === "traveling" ? "En Route" : "On Site"}
+                </Badge>
+              )}
+            </div>
+
+            {!activeShift ? (
+              <div className="p-4 bg-muted/50 rounded-lg text-center">
+                <Clock className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">
+                  Clock in for your shift first to start tracking job time.
+                </p>
+              </div>
+            ) : !activeJobEntry ? (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Select a job to dispatch to. Travel time will be tracked from your current location.
+                </p>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {displayJobs.length > 0 ? displayJobs.map((job) => (
+                    <div
+                      key={job.id}
+                      className="p-3 bg-muted/50 rounded-lg flex items-center justify-between hover:bg-muted transition-colors"
+                    >
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-[10px] text-muted-foreground">{job.job_number}</span>
+                        </div>
+                        <p className="font-medium text-foreground text-sm">{job.customer_name}</p>
+                        <p className="text-xs text-muted-foreground truncate">{job.site_address}</p>
+                      </div>
+                      <Button
+                        size="sm"
+                        onClick={() => handleDispatchToJob(job.id)}
+                        disabled={clockLoading}
+                        className="ml-2 bg-orange-600 hover:bg-orange-700"
+                        data-testid={`dispatch-to-job-${job.job_number}`}
+                      >
+                        {clockLoading ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Car className="w-4 h-4" />
+                        )}
+                      </Button>
+                    </div>
+                  )) : (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      No jobs assigned. Load demo data to see sample jobs.
+                    </p>
+                  )}
+                </div>
+              </div>
+            ) : activeJobEntry.status === "traveling" ? (
+              <div className="space-y-3">
+                <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Car className="w-4 h-4 text-yellow-600" />
+                    <p className="font-medium text-foreground">En Route to Job</p>
+                  </div>
+                  <p className="text-sm text-foreground font-mono">{activeJobEntry.job_number}</p>
+                  {activeJobEntry.estimated_travel_minutes && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Estimated: {activeJobEntry.estimated_travel_minutes.toFixed(0)} min
+                      {activeJobEntry.estimated_route_distance_miles && (
+                        <> ({activeJobEntry.estimated_route_distance_miles.toFixed(1)} mi)</>
+                      )}
+                    </p>
+                  )}
+                  <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
+                    <Timer className="w-3 h-3" />
+                    Departed: {new Date(activeJobEntry.dispatch_time!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                </div>
+                <Button
+                  onClick={handleArriveAtJob}
+                  disabled={clockLoading}
+                  className="w-full bg-blue-600 hover:bg-blue-700"
+                  data-testid="arrive-at-job-btn"
+                >
+                  {clockLoading ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <MapPinned className="w-4 h-4 mr-2" />
+                  )}
+                  I've Arrived On Site
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Wrench className="w-4 h-4 text-blue-600" />
+                    <p className="font-medium text-foreground">Working On Site</p>
+                  </div>
+                  <p className="text-sm text-foreground font-mono">{activeJobEntry.job_number}</p>
+                  <div className="grid grid-cols-2 gap-2 mt-2">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Travel Time</p>
+                      <p className="text-sm font-medium">{activeJobEntry.actual_travel_minutes?.toFixed(0) || "N/A"} min</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">On Site Since</p>
+                      <p className="text-sm font-medium">
+                        {new Date(activeJobEntry.job_start!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                  </div>
+                  {activeJobEntry.travel_variance_minutes !== null && activeJobEntry.travel_variance_minutes !== undefined && (
+                    <div className={`mt-2 text-xs flex items-center gap-1 ${
+                      activeJobEntry.travel_variance_minutes > 5 ? "text-red-600" :
+                      activeJobEntry.travel_variance_minutes < -5 ? "text-green-600" : "text-muted-foreground"
+                    }`}>
+                      {activeJobEntry.travel_variance_minutes > 0 ? "+" : ""}
+                      {activeJobEntry.travel_variance_minutes.toFixed(1)} min vs estimate
+                    </div>
+                  )}
+                </div>
+                <Button
+                  onClick={handleCompleteJob}
+                  disabled={clockLoading}
+                  className="w-full bg-green-600 hover:bg-green-700"
+                  data-testid="complete-job-btn"
+                >
+                  {clockLoading ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <CheckCircle className="w-4 h-4 mr-2" />
+                  )}
+                  Complete Job
+                </Button>
+              </div>
+            )}
+          </div>
+        </motion.div>
+      )}
+
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Urgent Items - Show for dispatcher and owner */}
