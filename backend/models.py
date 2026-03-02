@@ -5,9 +5,31 @@ import uuid
 
 # ==================== ENUMS ====================
 
-RoleType = Literal["admin", "manager", "dispatcher", "technician"]
+# Enhanced role types per RFC-002
+RoleType = Literal["admin", "owner", "manager", "dispatcher", "technician", "lead_tech", "accountant", "sales"]
 TaskStatus = Literal["lead", "diagnostic_call", "sales_call_scheduled", "dispatched", "out_for_service", "completed"]
-TechnicianStatus = Literal["available", "on_job", "en_route", "off_duty", "emergency"]
+TechnicianStatus = Literal["available", "on_job", "en_route", "off_duty", "emergency", "lunch"]
+
+# Lead status workflow per RFC-002 section 4.1.1
+LeadStatus = Literal["new", "contacted", "qualified", "quoted", "won", "lost"]
+
+# PCB status workflow per RFC-002 section 4.1.2
+PCBStatus = Literal["created", "assigned", "follow_up", "converted", "closed"]
+
+# Job type categories per RFC-002 section 4.2.1
+JobTypeCategory = Literal["residential_service", "residential_install", "commercial_service", "commercial_install"]
+
+# Checklist evidence types per RFC-002 section 4.2.2
+EvidenceType = Literal["before_photo", "after_photo", "note", "signature", "measurement"]
+
+# Proposal status per RFC-002 section 4.1.3
+ProposalStatus = Literal["draft", "sent", "viewed", "accepted", "rejected", "expired"]
+
+# Invoice status per RFC-002 section 4.6.1
+InvoiceStatus = Literal["draft", "sent", "partially_paid", "paid", "void", "overdue"]
+
+# Vendor PO status per RFC-002 section 4.7.2
+POStatus = Literal["draft", "submitted", "confirmed", "partial", "received", "cancelled"]
 
 # ==================== USER & AUTH ====================
 
