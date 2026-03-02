@@ -121,7 +121,7 @@ function AppRoutes() {
       <Route path="/dispatch" element={<ProtectedRoute><AppLayout><Dispatch /></AppLayout></ProtectedRoute>} />
       <Route path="/leads" element={<ProtectedRoute><AppLayout><Leads /></AppLayout></ProtectedRoute>} />
       <Route path="/customers" element={<ProtectedRoute><AppLayout><Customers /></AppLayout></ProtectedRoute>} />
-      <Route path="/sites" element={<ProtectedRoute><AppLayout><PlaceholderPage title="Sites" subtitle="Multi-site locations and access instructions" /></AppLayout></ProtectedRoute>} />
+      <Route path="/sites" element={<ProtectedRoute><AppLayout><Sites /></AppLayout></ProtectedRoute>} />
       <Route path="/technicians" element={<ProtectedRoute><AppLayout><Technicians /></AppLayout></ProtectedRoute>} />
       <Route path="/technicians/:id" element={<ProtectedRoute><AppLayout><TechnicianDetail /></AppLayout></ProtectedRoute>} />
       <Route path="/schedule" element={<ProtectedRoute><AppLayout><Schedule /></AppLayout></ProtectedRoute>} />
