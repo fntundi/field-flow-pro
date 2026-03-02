@@ -92,6 +92,61 @@ logger = logging.getLogger(__name__)
 
 # ==================== SECURITY UTILITIES ====================
 
+# JWT Settings
+JWT_SECRET = os.environ.get("JWT_SECRET", secrets.token_hex(32))
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRATION_HOURS = 24
+
+# Password hashing
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# HTTP Bearer for JWT
+security = HTTPBearer(auto_error=False)
+
+def hash_password(password: str) -> str:
+    return pwd_context.hash(password)
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return pwd_context.verify(plain_password, hashed_password)
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    to_encode = data.copy()
+    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(hours=JWT_EXPIRATION_HOURS))
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+def decode_access_token(token: str) -> Optional[dict]:
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        return payload
+    except jwt.ExpiredSignatureError:
+        return None
+    except jwt.InvalidTokenError:
+        return None
+
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> Optional[dict]:
+    if not credentials:
+        return None
+    token = credentials.credentials
+    payload = decode_access_token(token)
+    if not payload:
+        return None
+    user_id = payload.get("sub")
+    if not user_id:
+        return None
+    user = await db.auth_users.find_one({"id": user_id})
+    if not user:
+        return None
+    user.pop("_id", None)
+    user.pop("password_hash", None)
+    return user
+
+async def require_auth(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
+    user = await get_current_user(credentials)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return user
+
 # Maximum image size (5MB)
 MAX_IMAGE_SIZE = 5 * 1024 * 1024
 
