@@ -27,6 +27,7 @@ import GanttChart from "@/pages/GanttChart";
 import CustomerPortal from "@/pages/CustomerPortal";
 import MaintenanceAgreements from "@/pages/MaintenanceAgreements";
 import Proposals from "@/pages/Proposals";
+import Settings from "@/pages/Settings";
 
 const queryClient = new QueryClient();
 
