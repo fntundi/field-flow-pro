@@ -135,7 +135,7 @@ Build a modern HVAC field service management system per RFC-002 with comprehensi
 ## Test Credentials
 - **Demo Admin**: Click "Admin" button on login page
 - **Test User**: test@breezeflow.com / test123
-- **Customer Portal**: https://hvac-business-hub.preview.emergentagent.com/customer
+- **Customer Portal**: https://hvac-dispatch-3.preview.emergentagent.com/customer
 
 ## Remaining/Future Tasks
 

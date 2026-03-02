@@ -24,7 +24,7 @@
   },
   "test_credentials": {
     "demo_admin": "Click 'Admin' button on login page",
-    "api_base_url": "https://hvac-business-hub.preview.emergentagent.com"
+    "api_base_url": "https://hvac-dispatch-3.preview.emergentagent.com"
   },
   "seed_data_creation": "None - used existing test data and auto-seeded milestone templates",
   "retest_needed": false,

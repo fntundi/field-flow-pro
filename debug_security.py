@@ -6,7 +6,7 @@ Detailed security validation tests to identify specific issues
 import requests
 import json
 
-BASE_URL = "https://hvac-business-hub.preview.emergentagent.com/api"
+BASE_URL = "https://hvac-dispatch-3.preview.emergentagent.com/api"
 HEADERS = {"Content-Type": "application/json"}
 
 def test_empty_uuid_issue():
