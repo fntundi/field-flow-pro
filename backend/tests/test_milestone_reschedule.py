@@ -30,7 +30,7 @@ class TestMilestoneTemplates:
             assert isinstance(template["milestones"], list)
     
     def test_default_templates_exist(self):
-        """Verify all 4 default templates exist: 30/40/30, 50/50, 20/30/30/20, 100%"""
+        """Verify all 4 default templates exist: 30/40/30, 50/50, 20/30/30/20, Full Payment"""
         response = requests.get(f"{BASE_URL}/api/milestone-templates")
         assert response.status_code == 200
         
@@ -42,7 +42,7 @@ class TestMilestoneTemplates:
             "30/40/30",  # Standard Install
             "50/50",     # Equipment Only
             "20/30/30/20",  # Large Project
-            "100",       # Full Payment on Completion (100%)
+            "Full Payment",  # Full Payment on Completion (100%)
         ]
         
         for pattern in expected_patterns:
