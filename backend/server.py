@@ -803,12 +803,13 @@ async def update_appointment_status(appt_id: str, status: str):
 
 @api_router.post("/seed")
 async def seed_database():
-    """Seed database with sample data for development"""
+    """Seed database with comprehensive sample data for demo mode"""
     await db.technicians.delete_many({})
     await db.jobs.delete_many({})
     await db.tasks.delete_many({})
     await db.appointments.delete_many({})
     
+    # ===== TECHNICIANS =====
     technicians_data = [
         TechnicianCreate(
             employee_number="TECH-1001",
@@ -817,10 +818,20 @@ async def seed_database():
             phone="(555) 123-4567",
             role="Senior Technician",
             specialty="Residential Install",
-            skills=["HVAC Installation", "Heat Pump", "AC Repair", "Ductwork"],
+            skills=["HVAC Installation", "Heat Pump", "AC Repair", "Ductwork", "Refrigerant Handling"],
+            certifications=[
+                {"name": "EPA 608 Universal", "issuer": "EPA", "expiry_date": "2027-12-31"},
+                {"name": "NATE Certified", "issuer": "NATE", "expiry_date": "2026-06-30"},
+            ],
+            licenses=[
+                {"name": "HVAC Contractor License", "license_number": "TX-HVAC-12345", "state": "TX", "expiry_date": "2026-12-31"},
+            ],
             location="Dallas, TX",
             years_experience=8,
-            bio="Experienced HVAC technician specializing in residential installations and repairs.",
+            bio="Experienced HVAC technician specializing in residential installations and repairs. Known for attention to detail and customer service.",
+            availability_notes="Available Mon-Fri 7am-5pm, on-call weekends",
+            emergency_contact_name="Sarah Johnson",
+            emergency_contact_phone="(555) 123-9999",
         ),
         TechnicianCreate(
             employee_number="TECH-1002",
@@ -829,34 +840,50 @@ async def seed_database():
             phone="(555) 234-5678",
             role="Lead Technician",
             specialty="Commercial Systems",
-            skills=["Commercial HVAC", "RTU", "Chillers", "BAS"],
+            skills=["Commercial HVAC", "RTU", "Chillers", "BAS", "VRF Systems", "Building Automation"],
+            certifications=[
+                {"name": "EPA 608 Universal", "issuer": "EPA", "expiry_date": "2027-06-30"},
+                {"name": "Carrier Factory Authorized", "issuer": "Carrier", "expiry_date": "2026-12-31"},
+            ],
+            licenses=[
+                {"name": "HVAC Contractor License", "license_number": "TX-HVAC-23456", "state": "TX", "expiry_date": "2027-06-30"},
+            ],
             location="Plano, TX",
             years_experience=12,
-            bio="Lead technician with expertise in commercial HVAC systems.",
+            bio="Lead technician with extensive expertise in commercial HVAC systems. Specializes in complex troubleshooting and system optimization.",
+            availability_notes="Commercial jobs only. Available for emergency calls.",
         ),
         TechnicianCreate(
             employee_number="TECH-1003",
             name="Tom Brown",
             email="tom.brown@example.com",
             phone="(555) 345-6789",
-            role="Technician",
+            role="Emergency Technician",
             specialty="Emergency Repair",
-            skills=["Emergency Repair", "Gas Furnace", "Heat Pump", "Troubleshooting"],
+            skills=["Emergency Repair", "Gas Furnace", "Heat Pump", "Troubleshooting", "Electrical Diagnostics"],
+            certifications=[
+                {"name": "EPA 608 Universal", "issuer": "EPA", "expiry_date": "2026-12-31"},
+            ],
             location="Richardson, TX",
             years_experience=5,
-            bio="Skilled in emergency repairs and diagnostics.",
+            bio="Skilled in emergency repairs and rapid diagnostics. Calm under pressure with excellent problem-solving abilities.",
+            availability_notes="Primary on-call technician. 24/7 availability.",
         ),
         TechnicianCreate(
             employee_number="TECH-1004",
             name="Amy Davis",
             email="amy.davis@example.com",
             phone="(555) 456-7890",
-            role="Technician",
-            specialty="Maintenance",
-            skills=["Preventive Maintenance", "Filter Replacement", "System Inspection"],
+            role="Maintenance Technician",
+            specialty="Preventive Maintenance",
+            skills=["Preventive Maintenance", "Filter Replacement", "System Inspection", "Coil Cleaning", "Agreement Visits"],
+            certifications=[
+                {"name": "EPA 608 Type II", "issuer": "EPA", "expiry_date": "2027-03-31"},
+            ],
             location="Frisco, TX",
             years_experience=3,
-            bio="Dedicated to keeping HVAC systems running efficiently.",
+            bio="Dedicated maintenance technician focused on keeping HVAC systems running efficiently. Excellent at customer communication.",
+            availability_notes="Maintenance routes Mon-Thu. Fridays flexible.",
         ),
         TechnicianCreate(
             employee_number="TECH-1005",
@@ -865,22 +892,47 @@ async def seed_database():
             phone="(555) 567-8901",
             role="Junior Technician",
             specialty="Residential Repair",
-            skills=["AC Repair", "Thermostat Installation", "Basic Maintenance"],
+            skills=["AC Repair", "Thermostat Installation", "Basic Maintenance", "Filter Changes"],
+            certifications=[
+                {"name": "EPA 608 Type I", "issuer": "EPA", "expiry_date": "2027-09-30"},
+            ],
             location="Allen, TX",
             years_experience=1,
-            bio="Enthusiastic junior technician eager to learn and grow.",
+            bio="Enthusiastic junior technician eager to learn and grow. Great attitude and strong work ethic.",
+            availability_notes="Pairs with senior techs for complex jobs.",
+        ),
+        TechnicianCreate(
+            employee_number="TECH-1006",
+            name="Rachel Kim",
+            email="rachel.kim@example.com",
+            phone="(555) 678-9012",
+            role="Install Crew Lead",
+            specialty="Residential Install",
+            skills=["System Installation", "Ductwork Design", "Load Calculations", "Crew Management"],
+            certifications=[
+                {"name": "EPA 608 Universal", "issuer": "EPA", "expiry_date": "2027-01-31"},
+                {"name": "NATE Certified", "issuer": "NATE", "expiry_date": "2026-08-31"},
+            ],
+            location="McKinney, TX",
+            years_experience=7,
+            bio="Expert installer with strong leadership skills. Manages install crews and ensures quality workmanship.",
         ),
     ]
     
     tech_ids = []
-    for tech_data in technicians_data:
+    tech_statuses = ["available", "on_job", "en_route", "available", "on_job", "available"]
+    for i, tech_data in enumerate(technicians_data):
         tech = Technician(**tech_data.dict())
         tech.rating = 4.5 + (hash(tech.name) % 5) / 10
         tech.total_jobs = 50 + (hash(tech.name) % 150)
+        tech.status = tech_statuses[i % len(tech_statuses)]
+        tech.status_label = tech.status.replace("_", " ").title()
         await db.technicians.insert_one(tech.dict())
         tech_ids.append(tech.id)
     
+    # ===== JOBS =====
     jobs_data = [
+        # Service Jobs
         JobCreate(
             customer_name="Sarah Mitchell",
             customer_phone="(555) 111-2222",
@@ -891,9 +943,9 @@ async def seed_database():
             site_zip="75201",
             job_type="Residential Repair",
             title="A/C Not Cooling - Compressor Check",
-            description="Customer reports A/C not cooling properly. Need to check compressor.",
+            description="Customer reports A/C not cooling properly. Unit is 8 years old. Need to check compressor and refrigerant levels.",
             priority="normal",
-            scheduled_date="2026-02-27",
+            scheduled_date="2026-03-02",
         ),
         JobCreate(
             customer_name="Acme Corp",
@@ -905,9 +957,9 @@ async def seed_database():
             site_zip="75202",
             job_type="Commercial Repair",
             title="RTU #3 Economizer Repair",
-            description="Economizer actuator needs replacement on RTU #3.",
+            description="Economizer actuator needs replacement on RTU #3. Building management system showing fault codes.",
             priority="high",
-            scheduled_date="2026-02-27",
+            scheduled_date="2026-03-02",
         ),
         JobCreate(
             customer_name="James Rivera",
@@ -919,10 +971,11 @@ async def seed_database():
             site_zip="75023",
             job_type="Emergency Repair",
             title="No Heat Emergency - Gas Furnace",
-            description="Customer has no heat. Gas furnace not igniting.",
+            description="Customer has no heat. Gas furnace not igniting. Has elderly parent at home. URGENT.",
             priority="urgent",
-            scheduled_date="2026-02-27",
+            scheduled_date="2026-03-02",
         ),
+        # Install Jobs
         JobCreate(
             customer_name="Metro Office Park",
             customer_phone="(555) 444-5555",
@@ -933,33 +986,122 @@ async def seed_database():
             site_zip="75080",
             job_type="Commercial Install",
             title="New RTU Installation - Building A",
-            description="Install new 10-ton RTU on Building A rooftop.",
+            description="Install new 10-ton RTU on Building A rooftop. Includes crane rental and weekend work.",
             priority="normal",
-            scheduled_date="2026-02-28",
+            scheduled_date="2026-03-05",
+            estimated_hours=24,
+        ),
+        JobCreate(
+            customer_name="Thompson Family",
+            customer_phone="(555) 555-6666",
+            customer_email="mark.thompson@email.com",
+            site_address="4521 Maple Dr",
+            site_city="Frisco",
+            site_state="TX",
+            site_zip="75034",
+            job_type="Residential Install",
+            title="Complete System Replacement",
+            description="Replace 15-year-old system with new 4-ton Carrier Infinity. Includes ductwork modifications.",
+            priority="normal",
+            scheduled_date="2026-03-04",
+            estimated_hours=8,
+        ),
+        # Maintenance Jobs
+        JobCreate(
+            customer_name="Green Valley HOA",
+            customer_phone="(555) 666-7777",
+            customer_email="manager@greenvalleyhoa.com",
+            site_address="100 Clubhouse Way",
+            site_city="Allen",
+            site_state="TX",
+            site_zip="75013",
+            job_type="Maintenance",
+            title="Quarterly Maintenance - Clubhouse",
+            description="Quarterly preventive maintenance for clubhouse HVAC systems. 3 units total.",
+            priority="normal",
+            scheduled_date="2026-03-03",
+        ),
+        JobCreate(
+            customer_name="Dr. Patricia Wong",
+            customer_phone="(555) 777-8888",
+            customer_email="pwong@dentalcare.com",
+            site_address="789 Medical Plaza",
+            site_city="Plano",
+            site_state="TX",
+            site_zip="75024",
+            job_type="Commercial Repair",
+            title="AC Making Noise - Dental Office",
+            description="Front office AC unit making grinding noise. Affecting patient experience.",
+            priority="high",
+            scheduled_date="2026-03-02",
+        ),
+        # Additional variety
+        JobCreate(
+            customer_name="Sunrise Assisted Living",
+            customer_phone="(555) 888-9999",
+            customer_email="maintenance@sunriseal.com",
+            site_address="1200 Senior Way",
+            site_city="McKinney",
+            site_state="TX",
+            site_zip="75070",
+            job_type="Emergency Repair",
+            title="No Cooling - Memory Care Wing",
+            description="HVAC system down in memory care wing. Temperatures rising. Critical for resident health.",
+            priority="urgent",
+            scheduled_date="2026-03-02",
         ),
     ]
     
     job_ids = []
-    for job_data in jobs_data:
+    job_statuses = ["open", "in_progress", "in_progress", "open", "pending", "open", "in_progress", "urgent"]
+    for i, job_data in enumerate(jobs_data):
         job = Job(
-            job_number=f"JOB-{1001 + len(job_ids)}",
+            job_number=f"JOB-{1001 + i}",
+            status=job_statuses[i % len(job_statuses)],
             **job_data.dict()
         )
         await db.jobs.insert_one(job.dict())
         job_ids.append(job.id)
     
+    # ===== TASKS =====
     tasks_data = [
-        TaskCreate(job_id=job_ids[0], title="Initial customer call", task_type="tech_call", status="completed", assigned_technician_id=tech_ids[0], scheduled_date="2026-02-25", notes="Customer called reporting AC issues"),
-        TaskCreate(job_id=job_ids[0], title="Diagnostic visit", task_type="tech_call", status="out_for_service", assigned_technician_id=tech_ids[0], scheduled_date="2026-02-27", estimated_duration="2 hours"),
-        TaskCreate(job_id=job_ids[0], title="Present repair options", task_type="sales_call", status="sales_call_scheduled", scheduled_date="2026-02-28"),
-        TaskCreate(job_id=job_ids[1], title="Economizer assessment", task_type="tech_call", status="completed", assigned_technician_id=tech_ids[1], scheduled_date="2026-02-26"),
-        TaskCreate(job_id=job_ids[1], title="Parts ordering", task_type="other", status="dispatched"),
-        TaskCreate(job_id=job_ids[2], title="Emergency dispatch", task_type="service", status="out_for_service", assigned_technician_id=tech_ids[2], priority="urgent", scheduled_date="2026-02-27"),
-        TaskCreate(job_id=job_ids[2], title="Quote for replacement", task_type="sales_call", status="lead", scheduled_date="2026-02-28"),
-        TaskCreate(job_id=job_ids[3], title="Site survey", task_type="tech_call", status="completed", assigned_technician_id=tech_ids[3]),
-        TaskCreate(job_id=job_ids[3], title="Equipment delivery", task_type="other", status="dispatched"),
-        TaskCreate(job_id=job_ids[3], title="Day 1: Prep work", task_type="service", status="lead", assigned_technician_id=tech_ids[3], scheduled_date="2026-02-28"),
-        TaskCreate(job_id=job_ids[3], title="Day 2: Installation", task_type="service", status="lead", assigned_technician_id=tech_ids[3], scheduled_date="2026-03-01"),
+        # Job 1 - A/C Not Cooling
+        TaskCreate(job_id=job_ids[0], title="Initial customer call", task_type="tech_call", status="completed", assigned_technician_id=tech_ids[0], scheduled_date="2026-02-28", notes="Customer called reporting AC issues. System is 8 years old."),
+        TaskCreate(job_id=job_ids[0], title="Diagnostic visit", task_type="tech_call", status="out_for_service", assigned_technician_id=tech_ids[0], scheduled_date="2026-03-02", estimated_duration="2 hours"),
+        TaskCreate(job_id=job_ids[0], title="Present repair options", task_type="sales_call", status="sales_call_scheduled", scheduled_date="2026-03-03"),
+        
+        # Job 2 - RTU Economizer
+        TaskCreate(job_id=job_ids[1], title="Site assessment", task_type="tech_call", status="completed", assigned_technician_id=tech_ids[1], scheduled_date="2026-02-27"),
+        TaskCreate(job_id=job_ids[1], title="Parts ordering", task_type="other", status="dispatched", notes="Ordered Belimo actuator from Ferguson"),
+        TaskCreate(job_id=job_ids[1], title="Repair completion", task_type="service", status="lead", assigned_technician_id=tech_ids[1], scheduled_date="2026-03-02", estimated_duration="3 hours"),
+        
+        # Job 3 - Emergency No Heat
+        TaskCreate(job_id=job_ids[2], title="Emergency dispatch", task_type="service", status="out_for_service", assigned_technician_id=tech_ids[2], priority="urgent", scheduled_date="2026-03-02", estimated_duration="2 hours", notes="Elderly resident - prioritize"),
+        TaskCreate(job_id=job_ids[2], title="Quote for replacement", task_type="sales_call", status="lead", scheduled_date="2026-03-03"),
+        
+        # Job 4 - RTU Installation
+        TaskCreate(job_id=job_ids[3], title="Site survey completed", task_type="tech_call", status="completed", assigned_technician_id=tech_ids[5]),
+        TaskCreate(job_id=job_ids[3], title="Equipment ordered", task_type="other", status="completed", notes="10-ton RTU ordered from supplier"),
+        TaskCreate(job_id=job_ids[3], title="Crane scheduled", task_type="other", status="dispatched", notes="ABC Crane confirmed for 3/5"),
+        TaskCreate(job_id=job_ids[3], title="Day 1: Old unit removal", task_type="service", status="lead", assigned_technician_id=tech_ids[5], scheduled_date="2026-03-05"),
+        TaskCreate(job_id=job_ids[3], title="Day 2: New unit install", task_type="service", status="lead", assigned_technician_id=tech_ids[5], scheduled_date="2026-03-06"),
+        TaskCreate(job_id=job_ids[3], title="Startup & commissioning", task_type="service", status="lead", assigned_technician_id=tech_ids[1], scheduled_date="2026-03-06"),
+        
+        # Job 5 - Residential Install
+        TaskCreate(job_id=job_ids[4], title="Load calculation", task_type="tech_call", status="completed", assigned_technician_id=tech_ids[5]),
+        TaskCreate(job_id=job_ids[4], title="Equipment selection approved", task_type="sales_call", status="completed"),
+        TaskCreate(job_id=job_ids[4], title="Installation day", task_type="service", status="dispatched", assigned_technician_id=tech_ids[5], scheduled_date="2026-03-04", estimated_duration="8 hours"),
+        
+        # Job 6 - Maintenance
+        TaskCreate(job_id=job_ids[5], title="Filter changes - all units", task_type="service", status="lead", assigned_technician_id=tech_ids[3], scheduled_date="2026-03-03"),
+        TaskCreate(job_id=job_ids[5], title="Coil cleaning", task_type="service", status="lead", assigned_technician_id=tech_ids[3], scheduled_date="2026-03-03"),
+        TaskCreate(job_id=job_ids[5], title="Inspection report", task_type="other", status="lead", scheduled_date="2026-03-03"),
+        
+        # Job 7 - Dental Office
+        TaskCreate(job_id=job_ids[6], title="Diagnose noise issue", task_type="tech_call", status="out_for_service", assigned_technician_id=tech_ids[0], scheduled_date="2026-03-02", notes="Grinding noise from front unit"),
+        
+        # Job 8 - Memory Care Emergency
+        TaskCreate(job_id=job_ids[7], title="Emergency response", task_type="service", status="out_for_service", assigned_technician_id=tech_ids[2], priority="urgent", scheduled_date="2026-03-02", notes="CRITICAL - vulnerable population"),
     ]
     
     for i, task_data in enumerate(tasks_data):
@@ -973,18 +1115,57 @@ async def seed_database():
         task = Task(
             task_number=f"TASK-{1001 + i}",
             assigned_technician_name=tech_name,
-            order=i % 3,
+            order=i % 4,
             **task_data.dict()
         )
         await db.tasks.insert_one(task.dict())
     
+    # ===== APPOINTMENTS =====
+    # Create sample appointments with confirmation tokens
+    appointments_data = [
+        AppointmentCreate(
+            job_id=job_ids[0],
+            technician_id=tech_ids[0],
+            customer_name="Sarah Mitchell",
+            customer_phone="(555) 111-2222",
+            customer_email="sarah.mitchell@email.com",
+            site_address="1423 Oak Ave, Dallas, TX 75201",
+            scheduled_date="2026-03-02",
+            scheduled_time="10:00 AM",
+            estimated_duration="2 hours",
+            job_type="Residential Repair",
+            notes="A/C diagnostic visit. Please ensure access to outdoor unit.",
+        ),
+        AppointmentCreate(
+            job_id=job_ids[4],
+            technician_id=tech_ids[5],
+            customer_name="Thompson Family",
+            customer_phone="(555) 555-6666",
+            customer_email="mark.thompson@email.com",
+            site_address="4521 Maple Dr, Frisco, TX 75034",
+            scheduled_date="2026-03-04",
+            scheduled_time="8:00 AM",
+            estimated_duration="8 hours",
+            job_type="Residential Install",
+            notes="Full system replacement. Crew will arrive at 8 AM. Please have garage cleared for equipment staging.",
+        ),
+    ]
+    
+    appointment_tokens = []
+    for appt_data in appointments_data:
+        appointment = Appointment(**appt_data.dict())
+        await db.appointments.insert_one(appointment.dict())
+        appointment_tokens.append(appointment.confirmation_token)
+    
     await ensure_default_board_config()
     
     return {
-        "message": "Database seeded successfully",
+        "message": "Demo database seeded successfully",
         "technicians": len(technicians_data),
         "jobs": len(jobs_data),
         "tasks": len(tasks_data),
+        "appointments": len(appointments_data),
+        "sample_appointment_token": appointment_tokens[0] if appointment_tokens else None,
     }
 
 # Include the router in the main app
