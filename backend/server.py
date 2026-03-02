@@ -2608,14 +2608,13 @@ async def generate_maintenance_jobs(agreement_id: str):
             customer_phone=agreement.get("customer_phone"),
             customer_email=agreement.get("customer_email"),
             site_address=agreement["service_address"],
-            type="service",
-            category="maintenance",
-            status="scheduled",
+            job_type="Maintenance",
+            title=f"Scheduled Maintenance - {agreement['agreement_number']}",
+            description=f"Scheduled maintenance per agreement {agreement['agreement_number']}",
+            status="pending",
             priority="normal",
             scheduled_date=current_date.isoformat()[:10],
-            estimated_duration=2.0,  # 2 hours default
-            notes=f"Scheduled maintenance per agreement {agreement['agreement_number']}",
-            maintenance_agreement_id=agreement_id
+            estimated_hours=2.0,  # 2 hours default
         )
         
         await db.jobs.insert_one(job.dict())
