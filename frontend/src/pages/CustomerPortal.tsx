@@ -313,6 +313,7 @@ const CustomerPortal = () => {
                     <Label>Email</Label>
                     <Input
                       type="email"
+                      data-testid="login-email"
                       value={authForm.email}
                       onChange={(e) => setAuthForm({ ...authForm, email: e.target.value })}
                       placeholder="you@example.com"
@@ -322,12 +323,13 @@ const CustomerPortal = () => {
                     <Label>Password</Label>
                     <Input
                       type="password"
+                      data-testid="login-password"
                       value={authForm.password}
                       onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })}
                       placeholder="••••••••"
                     />
                   </div>
-                  <Button onClick={handleLogin} disabled={authLoading} className="w-full">
+                  <Button onClick={handleLogin} disabled={authLoading} className="w-full" data-testid="login-button">
                     {authLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <LogIn className="w-4 h-4 mr-2" />}
                     Login
                   </Button>
