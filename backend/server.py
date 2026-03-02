@@ -3728,6 +3728,444 @@ async def update_service_request_status(request_id: str, status: str, job_id: Op
     
     return {"message": f"Status updated to {status}"}
 
+# ==================== MILESTONE TEMPLATES API ====================
+
+@api_router.get("/milestone-templates")
+async def get_milestone_templates(active_only: bool = True):
+    """Get all milestone templates"""
+    query = {"is_active": True} if active_only else {}
+    templates = await db.milestone_templates.find(query).sort("name", 1).to_list(50)
+    for t in templates:
+        t.pop("_id", None)
+    return templates
+
+@api_router.get("/milestone-templates/{template_id}")
+async def get_milestone_template(template_id: str):
+    """Get a specific milestone template"""
+    if not validate_uuid(template_id):
+        raise HTTPException(status_code=400, detail="Invalid template ID")
+    
+    template = await db.milestone_templates.find_one({"id": template_id})
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    
+    template.pop("_id", None)
+    return template
+
+@api_router.post("/milestone-templates")
+async def create_milestone_template(data: dict):
+    """Create a new milestone template"""
+    # Validate milestones sum to 100%
+    milestones = data.get("milestones", [])
+    total_percent = sum(m.get("percentage", 0) for m in milestones)
+    if total_percent != 100:
+        raise HTTPException(status_code=400, detail=f"Milestone percentages must sum to 100%, got {total_percent}%")
+    
+    template = {
+        "id": str(uuid.uuid4()),
+        "name": sanitize_string(data.get("name", ""), 200),
+        "description": sanitize_string(data.get("description", ""), 500),
+        "milestones": [
+            {
+                "id": str(uuid.uuid4()),
+                "name": m.get("name", ""),
+                "percentage": m.get("percentage", 0),
+                "description": m.get("description", ""),
+                "trigger": m.get("trigger", "manual"),
+                "trigger_phase_id": m.get("trigger_phase_id")
+            }
+            for m in milestones
+        ],
+        "is_default": data.get("is_default", False),
+        "is_active": True,
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc),
+    }
+    
+    # If this is set as default, unset other defaults
+    if template["is_default"]:
+        await db.milestone_templates.update_many({}, {"$set": {"is_default": False}})
+    
+    await db.milestone_templates.insert_one(template)
+    template.pop("_id", None)
+    return template
+
+@api_router.put("/milestone-templates/{template_id}")
+async def update_milestone_template(template_id: str, data: dict):
+    """Update a milestone template"""
+    if not validate_uuid(template_id):
+        raise HTTPException(status_code=400, detail="Invalid template ID")
+    
+    template = await db.milestone_templates.find_one({"id": template_id})
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    
+    # Validate milestones if provided
+    if "milestones" in data:
+        total_percent = sum(m.get("percentage", 0) for m in data["milestones"])
+        if total_percent != 100:
+            raise HTTPException(status_code=400, detail=f"Milestone percentages must sum to 100%, got {total_percent}%")
+    
+    update_data = {
+        k: v for k, v in data.items() 
+        if k in ["name", "description", "milestones", "is_default", "is_active"]
+    }
+    update_data["updated_at"] = datetime.now(timezone.utc)
+    
+    # Handle default flag
+    if update_data.get("is_default"):
+        await db.milestone_templates.update_many({}, {"$set": {"is_default": False}})
+    
+    await db.milestone_templates.update_one({"id": template_id}, {"$set": update_data})
+    
+    updated = await db.milestone_templates.find_one({"id": template_id})
+    updated.pop("_id", None)
+    return updated
+
+@api_router.delete("/milestone-templates/{template_id}")
+async def delete_milestone_template(template_id: str):
+    """Soft delete (deactivate) a milestone template"""
+    if not validate_uuid(template_id):
+        raise HTTPException(status_code=400, detail="Invalid template ID")
+    
+    await db.milestone_templates.update_one(
+        {"id": template_id}, 
+        {"$set": {"is_active": False, "updated_at": datetime.now(timezone.utc)}}
+    )
+    return {"message": "Template deactivated"}
+
+# ==================== PROJECT BILLING API ====================
+
+@api_router.post("/projects/{project_id}/apply-template/{template_id}")
+async def apply_milestone_template(project_id: str, template_id: str):
+    """Apply a milestone template to a project"""
+    if not validate_uuid(project_id) or not validate_uuid(template_id):
+        raise HTTPException(status_code=400, detail="Invalid ID")
+    
+    project = await db.install_projects.find_one({"id": project_id})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    template = await db.milestone_templates.find_one({"id": template_id})
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    
+    project_total = project.get("estimated_cost", 0)
+    
+    # Create billing milestones from template
+    billing_milestones = []
+    for tm in template.get("milestones", []):
+        milestone = {
+            "id": str(uuid.uuid4()),
+            "template_milestone_id": tm["id"],
+            "name": tm["name"],
+            "percentage": tm["percentage"],
+            "amount": round(project_total * (tm["percentage"] / 100), 2),
+            "description": tm.get("description", ""),
+            "status": "pending",
+            "trigger": tm.get("trigger", "manual"),
+            "trigger_phase_id": tm.get("trigger_phase_id"),
+            "invoice_id": None,
+            "invoiced_at": None,
+            "paid_at": None,
+        }
+        billing_milestones.append(milestone)
+    
+    await db.install_projects.update_one(
+        {"id": project_id},
+        {"$set": {
+            "billing_milestones": billing_milestones,
+            "billing_template_id": template_id,
+            "updated_at": datetime.now(timezone.utc)
+        }}
+    )
+    
+    return {"message": "Template applied", "milestones": billing_milestones}
+
+@api_router.put("/projects/{project_id}/milestones/{milestone_id}")
+async def update_project_milestone(project_id: str, milestone_id: str, data: dict):
+    """Update a billing milestone status"""
+    if not validate_uuid(project_id) or not validate_uuid(milestone_id):
+        raise HTTPException(status_code=400, detail="Invalid ID")
+    
+    project = await db.install_projects.find_one({"id": project_id})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    milestones = project.get("billing_milestones", [])
+    milestone_idx = next((i for i, m in enumerate(milestones) if m["id"] == milestone_id), None)
+    
+    if milestone_idx is None:
+        raise HTTPException(status_code=404, detail="Milestone not found")
+    
+    # Update milestone
+    new_status = data.get("status")
+    if new_status:
+        milestones[milestone_idx]["status"] = new_status
+        
+        if new_status == "ready_to_bill":
+            milestones[milestone_idx]["triggered_at"] = datetime.now(timezone.utc).isoformat()
+    
+    await db.install_projects.update_one(
+        {"id": project_id},
+        {"$set": {"billing_milestones": milestones, "updated_at": datetime.now(timezone.utc)}}
+    )
+    
+    return {"message": "Milestone updated", "milestone": milestones[milestone_idx]}
+
+@api_router.post("/projects/{project_id}/milestones/{milestone_id}/invoice")
+async def invoice_milestone(project_id: str, milestone_id: str):
+    """Create an invoice for a billing milestone"""
+    if not validate_uuid(project_id) or not validate_uuid(milestone_id):
+        raise HTTPException(status_code=400, detail="Invalid ID")
+    
+    project = await db.install_projects.find_one({"id": project_id})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    milestones = project.get("billing_milestones", [])
+    milestone = next((m for m in milestones if m["id"] == milestone_id), None)
+    
+    if not milestone:
+        raise HTTPException(status_code=404, detail="Milestone not found")
+    
+    if milestone.get("invoice_id"):
+        raise HTTPException(status_code=400, detail="Milestone already invoiced")
+    
+    # Get customer info
+    customer = await db.customers.find_one({"name": project.get("customer_name")})
+    customer_email = customer.get("email", "") if customer else ""
+    
+    # Create invoice
+    invoice = {
+        "id": str(uuid.uuid4()),
+        "invoice_number": f"INV-{str(uuid.uuid4())[:8].upper()}",
+        "project_id": project_id,
+        "job_id": project.get("job_id"),
+        "customer_name": project.get("customer_name", ""),
+        "customer_email": customer_email,
+        "line_items": [{
+            "description": f"{project.get('name', 'Install Project')} - {milestone['name']}",
+            "quantity": 1,
+            "unit_price": milestone["amount"],
+            "total": milestone["amount"],
+        }],
+        "subtotal": milestone["amount"],
+        "tax_rate": 0,
+        "tax_amount": 0,
+        "total": milestone["amount"],
+        "balance_due": milestone["amount"],
+        "paid_amount": 0,
+        "status": "sent",
+        "notes": f"Milestone: {milestone['name']} ({milestone['percentage']}%)",
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc),
+    }
+    
+    await db.invoices.insert_one(invoice)
+    
+    # Update milestone
+    milestone_idx = next(i for i, m in enumerate(milestones) if m["id"] == milestone_id)
+    milestones[milestone_idx]["invoice_id"] = invoice["id"]
+    milestones[milestone_idx]["invoiced_at"] = datetime.now(timezone.utc).isoformat()
+    milestones[milestone_idx]["status"] = "invoiced"
+    
+    await db.install_projects.update_one(
+        {"id": project_id},
+        {"$set": {"billing_milestones": milestones, "updated_at": datetime.now(timezone.utc)}}
+    )
+    
+    invoice.pop("_id", None)
+    return {"message": "Invoice created", "invoice": invoice}
+
+# ==================== RESCHEDULE REQUESTS API ====================
+
+@api_router.get("/reschedule-requests")
+async def get_reschedule_requests(status: Optional[str] = None):
+    """Get all reschedule requests (dispatcher view)"""
+    query = {}
+    if status:
+        query["status"] = status
+    
+    requests = await db.reschedule_requests.find(query).sort("created_at", -1).to_list(100)
+    for r in requests:
+        r.pop("_id", None)
+    return requests
+
+@api_router.post("/reschedule-requests")
+async def create_reschedule_request(data: dict):
+    """Create a reschedule request (from customer portal)"""
+    job_id = data.get("job_id")
+    if not job_id or not validate_uuid(job_id):
+        raise HTTPException(status_code=400, detail="Valid job_id required")
+    
+    job = await db.jobs.find_one({"id": job_id})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    request = {
+        "id": str(uuid.uuid4()),
+        "request_number": f"RSC-{str(uuid.uuid4())[:8].upper()}",
+        "job_id": job_id,
+        "job_number": job.get("job_number", ""),
+        "customer_id": data.get("customer_id", ""),
+        "customer_name": job.get("customer_name", ""),
+        "customer_email": data.get("customer_email", ""),
+        "customer_phone": data.get("customer_phone"),
+        "original_date": job.get("scheduled_date", ""),
+        "original_time": job.get("scheduled_time"),
+        "requested_date": data.get("requested_date"),
+        "requested_time_preference": data.get("requested_time_preference"),
+        "reason": sanitize_string(data.get("reason", ""), 500),
+        "status": "pending",
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc),
+    }
+    
+    await db.reschedule_requests.insert_one(request)
+    request.pop("_id", None)
+    return request
+
+@api_router.put("/reschedule-requests/{request_id}/approve")
+async def approve_reschedule_request(request_id: str, data: dict, user: dict = Depends(require_auth)):
+    """Approve a reschedule request"""
+    if not validate_uuid(request_id):
+        raise HTTPException(status_code=400, detail="Invalid request ID")
+    
+    request = await db.reschedule_requests.find_one({"id": request_id})
+    if not request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    
+    if request.get("status") != "pending":
+        raise HTTPException(status_code=400, detail="Request is not pending")
+    
+    approved_date = data.get("approved_date") or request.get("requested_date")
+    approved_time = data.get("approved_time")
+    
+    # Update request
+    await db.reschedule_requests.update_one(
+        {"id": request_id},
+        {"$set": {
+            "status": "approved",
+            "approved_date": approved_date,
+            "approved_time": approved_time,
+            "processed_by_id": user.get("id"),
+            "processed_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
+        }}
+    )
+    
+    # Update job
+    job_update = {"scheduled_date": approved_date, "updated_at": datetime.now(timezone.utc)}
+    if approved_time:
+        job_update["scheduled_time"] = approved_time
+    
+    await db.jobs.update_one({"id": request["job_id"]}, {"$set": job_update})
+    
+    return {"message": "Reschedule approved", "new_date": approved_date, "new_time": approved_time}
+
+@api_router.put("/reschedule-requests/{request_id}/reject")
+async def reject_reschedule_request(request_id: str, data: dict, user: dict = Depends(require_auth)):
+    """Reject a reschedule request"""
+    if not validate_uuid(request_id):
+        raise HTTPException(status_code=400, detail="Invalid request ID")
+    
+    request = await db.reschedule_requests.find_one({"id": request_id})
+    if not request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    
+    await db.reschedule_requests.update_one(
+        {"id": request_id},
+        {"$set": {
+            "status": "rejected",
+            "rejection_reason": data.get("reason", ""),
+            "processed_by_id": user.get("id"),
+            "processed_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
+        }}
+    )
+    
+    return {"message": "Reschedule rejected"}
+
+@api_router.get("/customer/{customer_id}/reschedule-requests")
+async def get_customer_reschedule_requests(customer_id: str):
+    """Get reschedule requests for a specific customer"""
+    if not validate_uuid(customer_id):
+        raise HTTPException(status_code=400, detail="Invalid customer ID")
+    
+    requests = await db.reschedule_requests.find(
+        {"customer_id": customer_id}
+    ).sort("created_at", -1).to_list(50)
+    
+    for r in requests:
+        r.pop("_id", None)
+    return requests
+
+# ==================== CUSTOMER SUPPORT REQUESTS API ====================
+
+@api_router.post("/customer/{customer_id}/support-request")
+async def create_support_request(customer_id: str, data: dict):
+    """Create a support request from customer portal"""
+    if not validate_uuid(customer_id):
+        raise HTTPException(status_code=400, detail="Invalid customer ID")
+    
+    account = await db.customer_accounts.find_one({"id": customer_id})
+    if not account:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    
+    request = {
+        "id": str(uuid.uuid4()),
+        "request_number": f"SUP-{str(uuid.uuid4())[:8].upper()}",
+        "customer_id": customer_id,
+        "customer_name": account.get("name", ""),
+        "customer_email": account.get("email", ""),
+        "request_type": data.get("request_type", "service"),
+        "subject": sanitize_string(data.get("subject", ""), 200),
+        "description": sanitize_string(data.get("description", ""), 2000),
+        "service_address": data.get("service_address"),
+        "equipment_id": data.get("equipment_id"),
+        "equipment_type": data.get("equipment_type"),
+        "priority": data.get("priority", "normal"),
+        "status": "new",
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc),
+    }
+    
+    await db.support_requests.insert_one(request)
+    request.pop("_id", None)
+    return request
+
+@api_router.get("/support-requests")
+async def get_all_support_requests(status: Optional[str] = None):
+    """Get all support requests (admin view)"""
+    query = {}
+    if status:
+        query["status"] = status
+    
+    requests = await db.support_requests.find(query).sort("created_at", -1).to_list(100)
+    for r in requests:
+        r.pop("_id", None)
+    return requests
+
+@api_router.put("/support-requests/{request_id}")
+async def update_support_request(request_id: str, data: dict):
+    """Update a support request status"""
+    if not validate_uuid(request_id):
+        raise HTTPException(status_code=400, detail="Invalid request ID")
+    
+    request = await db.support_requests.find_one({"id": request_id})
+    if not request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    
+    update_data = {
+        k: v for k, v in data.items() 
+        if k in ["status", "assigned_to_id", "job_id", "response_notes"]
+    }
+    update_data["updated_at"] = datetime.now(timezone.utc)
+    
+    await db.support_requests.update_one({"id": request_id}, {"$set": update_data})
+    return {"message": "Request updated"}
+
 # ==================== OFFLINE SYNC API ====================
 
 @api_router.post("/sync/batch")
