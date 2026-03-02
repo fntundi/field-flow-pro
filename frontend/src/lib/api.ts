@@ -2816,10 +2816,10 @@ export const quickbooksApi = {
       method: 'POST',
     }),
   
-  triggerSync: (syncType: 'full' | 'invoices' | 'payments' | 'customers' = 'full') =>
+  triggerSync: (data: { sync_type: string }) =>
     fetchApi<{ message: string; sync_id: string }>('/integrations/quickbooks/sync', {
       method: 'POST',
-      body: JSON.stringify({ sync_type: syncType }),
+      body: JSON.stringify(data),
     }),
   
   getSyncLogs: (limit: number = 10) =>
