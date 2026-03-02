@@ -64,6 +64,11 @@ export default function Settings() {
     queryFn: () => rolesApi.getAll(),
   });
 
+  const { data: quickbooksStatus, isLoading: qbLoading } = useQuery({
+    queryKey: ["quickbooksStatus"],
+    queryFn: () => quickbooksApi.getStatus(),
+  });
+
   // Mutations
   const updateSettingsMutation = useMutation({
     mutationFn: (data: Partial<SystemSettings>) => settingsApi.update(data),
