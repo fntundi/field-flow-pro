@@ -77,8 +77,87 @@ export default function Invoices() {
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceRecord | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
   
   const queryClient = useQueryClient();
+
+  // Check for payment return from Stripe
+  React.useEffect(() => {
+    const sessionId = searchParams.get('session_id');
+    const paymentSuccess = searchParams.get('payment_success');
+    const paymentCancelled = searchParams.get('payment_cancelled');
+    
+    if (paymentCancelled) {
+      toast.info("Payment was cancelled");
+      setSearchParams({});
+      return;
+    }
+    
+    if (sessionId && paymentSuccess) {
+      // Poll for payment status
+      const pollStatus = async (attempts = 0) => {
+        const maxAttempts = 5;
+        const pollInterval = 2000;
+        
+        if (attempts >= maxAttempts) {
+          toast.warning("Payment status check timed out. Please check your email for confirmation.");
+          setSearchParams({});
+          return;
+        }
+        
+        try {
+          const status = await stripePaymentsApi.getCheckoutStatus(sessionId);
+          
+          if (status.payment_status === 'paid') {
+            toast.success("Payment successful! Thank you.");
+            queryClient.invalidateQueries({ queryKey: ["invoices"] });
+            queryClient.invalidateQueries({ queryKey: ["payments"] });
+            setSearchParams({});
+            return;
+          } else if (status.status === 'expired') {
+            toast.error("Payment session expired. Please try again.");
+            setSearchParams({});
+            return;
+          }
+          
+          // Continue polling if still pending
+          setTimeout(() => pollStatus(attempts + 1), pollInterval);
+        } catch (error) {
+          console.error('Error checking payment status:', error);
+          setSearchParams({});
+        }
+      };
+      
+      pollStatus();
+    }
+  }, [searchParams, setSearchParams, queryClient]);
+
+  // Queries
+  const { data: invoices = [], isLoading: invoicesLoading } = useQuery({
+    queryKey: ["invoices", statusFilter],
+    queryFn: () => invoicesApi.getAll({
+      status: statusFilter !== "all" ? statusFilter : undefined,
+    }),
+  });
+
+  const { data: payments = [], isLoading: paymentsLoading } = useQuery({
+    queryKey: ["payments"],
+    queryFn: () => paymentsApi.getAll(),
+  });
+
+  // Handle Pay Online
+  const handlePayOnline = async (invoice: InvoiceRecord) => {
+    setIsProcessingPayment(true);
+    try {
+      const session = await stripePaymentsApi.createCheckoutSession(invoice.id);
+      // Redirect to Stripe checkout
+      window.location.href = session.checkout_url;
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to initiate payment");
+      setIsProcessingPayment(false);
+    }
+  };
 
   // Queries
   const { data: invoices = [], isLoading: invoicesLoading } = useQuery({
