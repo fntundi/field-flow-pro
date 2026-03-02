@@ -67,12 +67,12 @@ const pcbStatusConfig = {
   closed: { label: "Closed", color: "bg-slate-500/20 text-slate-400 border-slate-500/30" },
 } as Record<string, { label: string; color: string }>;
 
-const priorityConfig: Record<string, { label: string; color: string }> = {
+const priorityConfig = {
   low: { label: "Low", color: "bg-slate-500/20 text-slate-400" },
   normal: { label: "Normal", color: "bg-blue-500/20 text-blue-400" },
   high: { label: "High", color: "bg-orange-500/20 text-orange-400" },
   urgent: { label: "Urgent", color: "bg-red-500/20 text-red-400" },
-};
+} as Record<string, { label: string; color: string }>;
 
 const sourceOptions = [
   { value: "website", label: "Website" },
