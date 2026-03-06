@@ -77,11 +77,11 @@ from voip_models import (
 )
 from voip_service import phone_com_service
 
-# Import modular routes (incremental migration from monolithic server.py)
-from routes import api_router as modular_api_router
-
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
+
+# Import modular routes AFTER loading .env (so routes get correct DB config)
+from routes import api_router as modular_api_router
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
