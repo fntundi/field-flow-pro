@@ -24,7 +24,7 @@ JWT_EXPIRATION_HOURS = 24
 # Security
 security = HTTPBearer(auto_error=False)
 
-# Database connection (singleton)
+# Database connection (lazy singleton)
 _db_client = None
 _db = None
 
@@ -32,20 +32,19 @@ def get_database():
     """Get database connection - creates connection on first call"""
     global _db_client, _db
     if _db is None:
+        # Load from environment - must happen AFTER dotenv is loaded
         mongo_url = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
-        db_name = os.environ.get("DB_NAME", "field_service_db")
+        db_name = os.environ.get("DB_NAME", "test_database")
+        logger.info(f"Connecting to MongoDB: {db_name}")
         _db_client = AsyncIOMotorClient(mongo_url)
         _db = _db_client[db_name]
     return _db
 
-# Shorthand for getting db
-db = property(lambda self: get_database())
 
-# Make db accessible as module-level variable
-def __getattr__(name):
-    if name == "db":
-        return get_database()
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+# Dependency for routes to get DB
+async def get_db():
+    """FastAPI dependency to get database instance"""
+    return get_database()
 
 # Input sanitization
 def sanitize_string(value: Optional[str], max_length: int = 1000) -> Optional[str]:
