@@ -11,11 +11,13 @@ api_router = APIRouter()
 from .jobs import router as jobs_router
 from .customers import router as customers_router
 from .technicians import router as technicians_router
+from .scheduling import router as scheduling_router
 
 # Include routers - these will be mounted at /api/jobs, /api/customers, etc.
 api_router.include_router(jobs_router)
 api_router.include_router(customers_router)
 api_router.include_router(technicians_router)
+api_router.include_router(scheduling_router)
 
 # Future route modules (uncomment as migrated):
 # from .scheduling import router as scheduling_router
