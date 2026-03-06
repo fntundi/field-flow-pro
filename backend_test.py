@@ -13,7 +13,7 @@ from datetime import datetime
 from typing import Dict, Any, Optional
 
 # Configuration
-BASE_URL = "https://serviceflow-app-7.preview.emergentagent.com/api"
+BASE_URL = "https://climate-control-pro-3.preview.emergentagent.com/api"
 HEADERS = {"Content-Type": "application/json"}
 
 class APITester:

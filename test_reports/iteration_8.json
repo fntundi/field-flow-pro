@@ -25,7 +25,7 @@
   "test_credentials": {
     "demo_admin": "Click 'Admin' button on login page",
     "manual_login": "test@test.com / test123",
-    "api_base_url": "https://serviceflow-app-7.preview.emergentagent.com"
+    "api_base_url": "https://climate-control-pro-3.preview.emergentagent.com"
   },
   "seed_data_creation": "Test push subscriptions created with TEST_ prefix",
   "retest_needed": false,

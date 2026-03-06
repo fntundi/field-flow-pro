@@ -4,7 +4,7 @@
 import * as SecureStore from 'expo-secure-store';
 import Constants from 'expo-constants';
 
-const API_BASE_URL = Constants.expoConfig?.extra?.apiUrl || 'https://serviceflow-app-7.preview.emergentagent.com/api';
+const API_BASE_URL = Constants.expoConfig?.extra?.apiUrl || 'https://climate-control-pro-3.preview.emergentagent.com/api';
 
 let authToken: string | null = null;
 

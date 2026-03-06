@@ -25,7 +25,7 @@
   "test_credentials": {
     "manual_login": "test@test.com / test123",
     "demo_login": "Click 'Admin' button on login page",
-    "api_base_url": "https://serviceflow-app-7.preview.emergentagent.com"
+    "api_base_url": "https://climate-control-pro-3.preview.emergentagent.com"
   },
   "seed_data_creation": "TEST_ prefixed push subscriptions created during testing",
   "retest_needed": false,
@@ -38,7 +38,7 @@
       "service_worker": "PASS - sw.js served correctly with caching and push notification handlers"
     },
     "service_worker_registration": {
-      "registration_on_load": "PASS - Console logs confirm 'Service Worker registered: https://serviceflow-app-7.preview.emergentagent.com/'",
+      "registration_on_load": "PASS - Console logs confirm 'Service Worker registered: https://climate-control-pro-3.preview.emergentagent.com/'",
       "pwa_initialization": "PASS - App.tsx calls registerServiceWorker(), setupInstallPrompt(), offlineStorage.init() on startup"
     },
     "push_notification_endpoints": {
