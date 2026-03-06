@@ -237,8 +237,8 @@ export default function SchedulingBoard() {
             />
           </div>
           <Select value={selectedTechFilter} onValueChange={setSelectedTechFilter}>
-            <SelectTrigger className="w-[180px]">
-              <Filter className="w-4 h-4 mr-2" />
+            <SelectTrigger className="w-full sm:w-[180px]">
+              <Filter className="w-4 h-4 mr-2 hidden sm:block" />
               <SelectValue placeholder="All Technicians" />
             </SelectTrigger>
             <SelectContent>
@@ -249,6 +249,11 @@ export default function SchedulingBoard() {
             </SelectContent>
           </Select>
         </div>
+      </div>
+
+      {/* Mobile Scroll Hint */}
+      <div className="sm:hidden text-xs text-muted-foreground text-center py-2 flex items-center justify-center gap-2">
+        <span>←</span> Swipe to see more technicians <span>→</span>
       </div>
 
       {/* Schedule Grid */}
