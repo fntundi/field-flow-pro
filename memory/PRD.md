@@ -217,18 +217,21 @@ Build a modern HVAC field service management system per RFC-002 with comprehensi
 ## Remaining/Future Tasks
 
 ### P1 - In Progress
+- [ ] Complete backend route migration (switch v2 routes to primary /api)
 - [ ] PWA full implementation (service worker registration, offline support)
 - [ ] QuickBooks OAuth flow testing with real credentials
 
 ### P2 - Medium Priority
 - [ ] Google Maps route calculation (BLOCKED - needs user API key)
-- [ ] Mobile app (React Native) 
+- [ ] Mobile app (React Native) - scaffolded but not tested
 - [ ] Deeper accounting integration (bi-directional sync)
+- [ ] VoIP live mode (requires Phone.com API key)
 
 ### P3 - Lower Priority
 - [ ] Read receipts for chat
 - [ ] Typing indicators for chat
 - [ ] Advanced inventory reporting
+- [ ] Sites page UX fixes (AlertDialog for delete, Edit functionality)
 
 ## File Structure
 ```
