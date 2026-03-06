@@ -57,6 +57,13 @@ def sanitize_string(value: Optional[str], max_length: int = 1000) -> Optional[st
     value = re.sub(r'[;\'"\\]', '', value)
     return value[:max_length].strip()
 
+def sanitize_search_query(query: str) -> str:
+    """Sanitize search query for MongoDB regex"""
+    if not query:
+        return query
+    # Escape special regex characters
+    return re.escape(sanitize_string(query, 200))
+
 def validate_uuid(value: str) -> bool:
     """Validate UUID format"""
     try:
