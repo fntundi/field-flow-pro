@@ -128,3 +128,8 @@ def require_role(allowed_roles: List[str]):
             )
         return user
     return role_checker
+
+# Alias for get_current_user as require_auth for clearer semantics
+async def require_auth(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
+    """Require authentication - raises 401 if not authenticated"""
+    return await get_current_user(credentials)
