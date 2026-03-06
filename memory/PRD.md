@@ -112,7 +112,16 @@ Build a modern HVAC field service management system per RFC-002 with comprehensi
 ### Backend Refactoring - IN PROGRESS
 - [x] **Routes Directory Structure** - Created /app/backend/routes/ with modular files
 - [x] **Shared Utilities** - Created shared.py with DB, auth, and validation helpers
-- [ ] **Route Migration** - Incrementally move routes from server.py to modules
+- [x] **Jobs Routes** - Migrated Jobs CRUD, checklists, equipment usage, chat to /api/v2/jobs
+- [x] **Customers Routes** - Migrated Customers CRUD to /api/v2/customers
+- [x] **Technicians Routes** - Migrated Technicians CRUD, image upload, status to /api/v2/technicians
+- [x] **Scheduling Routes** - Migrated Appointments CRUD to /api/v2/appointments
+- [ ] **Route Migration Complete** - Switch v2 routes to primary and remove duplicates from server.py
+
+### Mobile-Friendly Web Enhancements - PARTIAL
+- [x] **Scheduling Board** - Added responsive controls, mobile scroll hint, full-width inputs
+- [x] **Existing Pages** - Jobs, Dashboard, Customers, Invoices already have good mobile layouts
+- [ ] **Additional responsive improvements** - As needed per user feedback
 
 ### Install Project Billing (RFC-002 Section 4.5.3)
 - [x] **Milestone Templates** - 4 predefined configurable templates
