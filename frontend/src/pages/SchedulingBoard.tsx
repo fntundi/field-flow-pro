@@ -227,13 +227,13 @@ export default function SchedulingBoard() {
         <div className="flex-1" />
         
         <div className="flex items-center gap-2 w-full sm:w-auto">
-          <div className="relative">
+          <div className="relative w-full sm:w-auto">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
               placeholder="Search technicians..."
-              className="pl-10 w-[200px]"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 w-full sm:w-48"
             />
           </div>
           <Select value={selectedTechFilter} onValueChange={setSelectedTechFilter}>
