@@ -207,12 +207,12 @@ export default function SchedulingBoard() {
       </div>
 
       {/* Controls */}
-      <div className="flex flex-wrap items-center gap-4">
+      <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-3 sm:gap-4">
         <div className="flex items-center gap-2">
           <Button variant="outline" size="icon" onClick={() => navigateDate('prev')}>
             <ChevronLeft className="w-4 h-4" />
           </Button>
-          <Button variant="outline" onClick={() => setCurrentDate(new Date())}>
+          <Button variant="outline" size="sm" onClick={() => setCurrentDate(new Date())}>
             Today
           </Button>
           <Button variant="outline" size="icon" onClick={() => navigateDate('next')}>
@@ -220,13 +220,13 @@ export default function SchedulingBoard() {
           </Button>
         </div>
         
-        <div className="font-medium">
+        <div className="font-medium text-sm sm:text-base">
           {viewMode === 'day' ? formatDate(currentDate) : `Week of ${formatDate(weekDates[0])}`}
         </div>
         
         <div className="flex-1" />
         
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
