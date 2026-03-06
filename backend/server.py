@@ -9173,6 +9173,10 @@ async def get_quickbooks_sync_logs(user: dict = Depends(require_auth), limit: in
 # Include the router in the main app AFTER all routes are defined
 app.include_router(api_router)
 
+# Include modular routes (prefixed with /api/v2 for testing during migration)
+# Once fully tested, these will replace the original routes
+app.include_router(modular_api_router, prefix="/api/v2")
+
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
