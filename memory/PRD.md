@@ -109,7 +109,14 @@ Build a modern HVAC field service management system per RFC-002 with comprehensi
 - [x] **Settings Integration** - VoIP configuration section with feature toggles
 - [x] **Seed Data** - 8 demo calls, 3 demo SMS for testing
 
-### Backend Refactoring - COMPLETED (Dec 2025)
+### Quick Contact Customer Feature - COMPLETED (Dec 2025)
+- [x] **ContactCustomerMenu Component** - Reusable component for contacting customers via Call, SMS, Email, Chat
+- [x] **Jobs Page** - Added Contact column with quick action buttons (Call, SMS, Email)
+- [x] **Jobs Mobile View** - Added contact actions with labels for mobile users
+- [x] **Leads Page** - Added Quick Contact column to leads table
+- [x] **Scheduling Board** - Added contact icon menu on job cards with tooltip
+- [x] **Invoices Page** - Added Contact button to invoice cards
+- [x] **Sites Page** - Contact buttons for site contacts (existing)
 - [x] **Routes Directory Structure** - Created /app/backend/routes/ with modular files
 - [x] **Shared Utilities** - Created shared.py with DB, auth, and validation helpers
 - [x] **Jobs Routes** - Migrated Jobs CRUD, checklists, equipment usage, chat
