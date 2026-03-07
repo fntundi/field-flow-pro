@@ -550,11 +550,24 @@ export default function Invoices() {
                           </DropdownMenu>
                         </div>
                         
-                        <div className="mt-3 pt-3 border-t border-border flex flex-wrap gap-4 text-sm text-muted-foreground">
-                          {invoice.labor_total > 0 && <span>Labor: ${invoice.labor_total.toFixed(2)}</span>}
-                          {invoice.parts_total > 0 && <span>Parts: ${invoice.parts_total.toFixed(2)}</span>}
-                          {invoice.trip_total > 0 && <span>Trip: ${invoice.trip_total.toFixed(2)}</span>}
-                          {invoice.tax_amount > 0 && <span>Tax: ${invoice.tax_amount.toFixed(2)}</span>}
+                        <div className="mt-3 pt-3 border-t border-border flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                          <div className="flex-1 flex flex-wrap gap-4">
+                            {invoice.labor_total > 0 && <span>Labor: ${invoice.labor_total.toFixed(2)}</span>}
+                            {invoice.parts_total > 0 && <span>Parts: ${invoice.parts_total.toFixed(2)}</span>}
+                            {invoice.trip_total > 0 && <span>Trip: ${invoice.trip_total.toFixed(2)}</span>}
+                            {invoice.tax_amount > 0 && <span>Tax: ${invoice.tax_amount.toFixed(2)}</span>}
+                          </div>
+                          <ContactCustomerMenu
+                            contact={{
+                              name: invoice.customer_name,
+                              phone: undefined,
+                              email: invoice.customer_email,
+                              customerId: invoice.customer_id,
+                              jobId: invoice.job_id,
+                            }}
+                            variant="button"
+                            size="sm"
+                          />
                         </div>
                       </CardContent>
                     </Card>
