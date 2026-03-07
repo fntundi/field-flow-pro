@@ -116,7 +116,30 @@ Build a modern HVAC field service management system per RFC-002 with comprehensi
 - [x] **Customers Routes** - Migrated Customers CRUD to /api/v2/customers
 - [x] **Technicians Routes** - Migrated Technicians CRUD, image upload, status to /api/v2/technicians
 - [x] **Scheduling Routes** - Migrated Appointments CRUD to /api/v2/appointments
+- [x] **Financials Routes** - Migrated Invoices, Payments, Stripe checkout to /api/v2/financials (Dec 2025)
+- [x] **Leads Routes** - Migrated Leads, PCBs, Proposals to /api/v2/leads (Dec 2025)
+- [x] **Inventory Routes** - Migrated Inventory items/categories, Trucks, Stock checks, Transfers to /api/v2/inventory (Dec 2025)
 - [ ] **Route Migration Complete** - Switch v2 routes to primary and remove duplicates from server.py
+
+**Migrated Routes Summary** (all functional under /api/v2/):
+- `/api/v2/jobs/*` - Jobs CRUD, checklists, equipment, chat
+- `/api/v2/customers/*` - Customers CRUD
+- `/api/v2/technicians/*` - Technicians CRUD, images, status
+- `/api/v2/appointments/*` - Appointments/Scheduling CRUD
+- `/api/v2/financials/invoices/*` - Invoices CRUD, status updates
+- `/api/v2/financials/payments/*` - Payments CRUD
+- `/api/v2/financials/checkout/*` - Stripe checkout integration
+- `/api/v2/leads/*` - Leads CRUD, metrics, conversion
+- `/api/v2/leads/pcbs/*` - PCBs CRUD, conversion to job
+- `/api/v2/leads/proposals/*` - Proposals CRUD, options, acceptance
+- `/api/v2/inventory/items/*` - Inventory items CRUD
+- `/api/v2/inventory/categories/*` - Inventory categories CRUD
+- `/api/v2/inventory/trucks/*` - Trucks CRUD, assignment
+- `/api/v2/inventory/truck-inventory/*` - Truck stock management
+- `/api/v2/inventory/stock-checks/*` - Stock check CRUD
+- `/api/v2/inventory/restock-requests/*` - Restock workflow
+- `/api/v2/inventory/transfers/*` - Transfer workflow
+- `/api/v2/inventory/audit-log` - Inventory audit trail
 
 ### Mobile-Friendly Web Enhancements - PARTIAL
 - [x] **Scheduling Board** - Added responsive controls, mobile scroll hint, full-width inputs
