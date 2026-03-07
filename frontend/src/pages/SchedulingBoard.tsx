@@ -331,20 +331,57 @@ export default function SchedulingBoard() {
                             const style = getJobStyle(job);
                             const colorClass = JOB_COLORS[job.job_type] || JOB_COLORS.default;
                             return (
-                              <motion.div
-                                key={job.id}
-                                className={`absolute left-1 right-1 rounded border px-2 py-1 cursor-move overflow-hidden ${colorClass}`}
-                                style={style}
-                                draggable
-                                onDragStart={() => handleDragStart(job)}
-                                whileHover={{ scale: 1.02 }}
-                                data-testid={`schedule-job-${job.id}`}
-                              >
-                                <div className="text-xs font-medium truncate">{job.customer_name}</div>
-                                <div className="text-[10px] text-muted-foreground truncate">
-                                  {job.job_type}
-                                </div>
-                              </motion.div>
+                              <TooltipProvider key={job.id}>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <motion.div
+                                      className={`absolute left-1 right-1 rounded border px-2 py-1 cursor-move overflow-hidden ${colorClass}`}
+                                      style={style}
+                                      draggable
+                                      onDragStart={() => handleDragStart(job)}
+                                      whileHover={{ scale: 1.02 }}
+                                      data-testid={`schedule-job-${job.id}`}
+                                    >
+                                      <div className="flex items-center justify-between gap-1">
+                                        <div className="text-xs font-medium truncate flex-1">{job.customer_name}</div>
+                                        <div 
+                                          onClick={(e) => e.stopPropagation()}
+                                          onDragStart={(e) => e.stopPropagation()}
+                                          draggable={false}
+                                        >
+                                          <ContactCustomerMenu
+                                            contact={{
+                                              name: job.customer_name,
+                                              phone: job.customer_phone,
+                                              email: job.customer_email,
+                                              customerId: job.customer_id,
+                                              jobId: job.id,
+                                            }}
+                                            variant="icon"
+                                          />
+                                        </div>
+                                      </div>
+                                      <div className="text-[10px] text-muted-foreground truncate">
+                                        {job.job_type}
+                                      </div>
+                                    </motion.div>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="right" className="max-w-[250px]">
+                                    <div className="space-y-1">
+                                      <p className="font-medium">{job.customer_name}</p>
+                                      <p className="text-xs">{job.job_type}</p>
+                                      {job.site_address && (
+                                        <p className="text-xs text-muted-foreground">{job.site_address}</p>
+                                      )}
+                                      {job.customer_phone && (
+                                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                          <Phone className="w-3 h-3" /> {job.customer_phone}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
                             );
                           })}
                         </div>
