@@ -71,6 +71,7 @@ import {
 } from "lucide-react";
 import { sitesApi, customersApi, Site, SiteCreate, SiteContact, Job, CustomerEquipmentRecord } from "@/lib/api";
 import { toast } from "sonner";
+import { ContactCustomerMenu } from "@/components/ContactCustomerMenu";
 
 const siteTypeIcons = {
   residential: Home,
