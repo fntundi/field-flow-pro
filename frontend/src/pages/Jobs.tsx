@@ -357,6 +357,19 @@ const Jobs = () => {
                     {job.priority}
                   </span>
                 </div>
+                {/* Mobile Contact Actions */}
+                <div className="mt-3 pt-3 border-t border-border" onClick={(e) => e.stopPropagation()}>
+                  <ContactQuickActions
+                    contact={{
+                      name: job.customer_name,
+                      phone: job.customer_phone,
+                      email: job.customer_email,
+                      customerId: job.customer_id,
+                      jobId: job.id,
+                    }}
+                    showLabels
+                  />
+                </div>
               </div>
             ))}
           </div>
