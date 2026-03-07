@@ -277,6 +277,7 @@ const Jobs = () => {
                   <th className="text-left">Scheduled</th>
                   <th className="text-left">Priority</th>
                   <th className="text-left">Status</th>
+                  <th className="text-left">Contact</th>
                 </tr>
               </thead>
               <tbody>
@@ -308,6 +309,17 @@ const Jobs = () => {
                     </td>
                     <td>
                       <StatusBadge status={job.status} />
+                    </td>
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <ContactQuickActions
+                        contact={{
+                          name: job.customer_name,
+                          phone: job.customer_phone,
+                          email: job.customer_email,
+                          customerId: job.customer_id,
+                          jobId: job.id,
+                        }}
+                      />
                     </td>
                   </tr>
                 ))}
