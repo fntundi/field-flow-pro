@@ -604,8 +604,14 @@ export default function Leads() {
                               {priorityCfg.label}
                             </Badge>
                           </td>
-                          <td className="px-4 py-3 text-xs text-muted-foreground">
-                            {new Date(lead.created_at).toLocaleDateString()}
+                          <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                            <ContactQuickActions
+                              contact={{
+                                name: lead.contact_name,
+                                phone: lead.contact_phone,
+                                email: lead.contact_email,
+                              }}
+                            />
                           </td>
                           <td className="px-4 py-3">
                             <DropdownMenu>
