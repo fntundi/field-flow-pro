@@ -109,37 +109,60 @@ Build a modern HVAC field service management system per RFC-002 with comprehensi
 - [x] **Settings Integration** - VoIP configuration section with feature toggles
 - [x] **Seed Data** - 8 demo calls, 3 demo SMS for testing
 
-### Backend Refactoring - IN PROGRESS
+### Backend Refactoring - COMPLETED (Dec 2025)
 - [x] **Routes Directory Structure** - Created /app/backend/routes/ with modular files
 - [x] **Shared Utilities** - Created shared.py with DB, auth, and validation helpers
-- [x] **Jobs Routes** - Migrated Jobs CRUD, checklists, equipment usage, chat to /api/v2/jobs
-- [x] **Customers Routes** - Migrated Customers CRUD to /api/v2/customers
-- [x] **Technicians Routes** - Migrated Technicians CRUD, image upload, status to /api/v2/technicians
-- [x] **Scheduling Routes** - Migrated Appointments CRUD to /api/v2/appointments
-- [x] **Financials Routes** - Migrated Invoices, Payments, Stripe checkout to /api/v2/financials (Dec 2025)
-- [x] **Leads Routes** - Migrated Leads, PCBs, Proposals to /api/v2/leads (Dec 2025)
-- [x] **Inventory Routes** - Migrated Inventory items/categories, Trucks, Stock checks, Transfers to /api/v2/inventory (Dec 2025)
-- [ ] **Route Migration Complete** - Switch v2 routes to primary and remove duplicates from server.py
+- [x] **Jobs Routes** - Migrated Jobs CRUD, checklists, equipment usage, chat
+- [x] **Customers Routes** - Migrated Customers CRUD
+- [x] **Technicians Routes** - Migrated Technicians CRUD, image upload, status
+- [x] **Scheduling Routes** - Migrated Appointments CRUD
+- [x] **Financials Routes** - Migrated Invoices, Payments, Stripe checkout
+- [x] **Leads Routes** - Migrated Leads, PCBs, Proposals
+- [x] **Inventory Routes** - Migrated Inventory items/categories, Trucks, Stock checks, Transfers
+- [x] **Tasks Routes** - Migrated Tasks CRUD and reordering
+- [x] **Sites Routes** - Migrated Sites CRUD, equipment linking, job history
+- [x] **Vendors Routes** - Migrated Vendors and Purchase Orders
+- [x] **VoIP Routes** - Migrated Phone.com integration, calls, SMS, analytics
+- [x] **Reports Routes** - Migrated business summary, queries, analytics
+- [x] **Settings Routes** - Migrated system settings, AI config, maps config, push notifications, roles
+- [x] **Projects Routes** - Migrated Install projects, phases, milestones, billing
+- [x] **Integrations Routes** - Migrated QuickBooks, customer equipment
+- [x] **Route Switchover Complete** - All modular routes now live at /api prefix
 
-**Migrated Routes Summary** (all functional under /api/v2/):
-- `/api/v2/jobs/*` - Jobs CRUD, checklists, equipment, chat
-- `/api/v2/customers/*` - Customers CRUD
-- `/api/v2/technicians/*` - Technicians CRUD, images, status
-- `/api/v2/appointments/*` - Appointments/Scheduling CRUD
-- `/api/v2/financials/invoices/*` - Invoices CRUD, status updates
-- `/api/v2/financials/payments/*` - Payments CRUD
-- `/api/v2/financials/checkout/*` - Stripe checkout integration
-- `/api/v2/leads/*` - Leads CRUD, metrics, conversion
-- `/api/v2/leads/pcbs/*` - PCBs CRUD, conversion to job
-- `/api/v2/leads/proposals/*` - Proposals CRUD, options, acceptance
-- `/api/v2/inventory/items/*` - Inventory items CRUD
-- `/api/v2/inventory/categories/*` - Inventory categories CRUD
-- `/api/v2/inventory/trucks/*` - Trucks CRUD, assignment
-- `/api/v2/inventory/truck-inventory/*` - Truck stock management
-- `/api/v2/inventory/stock-checks/*` - Stock check CRUD
-- `/api/v2/inventory/restock-requests/*` - Restock workflow
-- `/api/v2/inventory/transfers/*` - Transfer workflow
-- `/api/v2/inventory/audit-log` - Inventory audit trail
+**Migrated Routes Summary** (all functional under /api/):
+- `/api/jobs/*` - Jobs CRUD, checklists, equipment, chat
+- `/api/customers/*` - Customers CRUD
+- `/api/technicians/*` - Technicians CRUD, images, status
+- `/api/appointments/*` - Appointments/Scheduling CRUD
+- `/api/financials/invoices/*` - Invoices CRUD, status updates
+- `/api/financials/payments/*` - Payments CRUD
+- `/api/financials/checkout/*` - Stripe checkout integration
+- `/api/leads/*` - Leads CRUD, metrics, conversion
+- `/api/leads/pcbs/*` - PCBs CRUD, conversion to job
+- `/api/leads/proposals/*` - Proposals CRUD, options, acceptance
+- `/api/inventory/*` - Items, categories, trucks, stock, transfers
+- `/api/tasks/*` - Task CRUD and reordering
+- `/api/sites/*` - Sites CRUD, equipment, job history
+- `/api/vendors/*` - Vendors and purchase orders
+- `/api/voip/*` - Calls, SMS, analytics, webhooks
+- `/api/reports/*` - Summary, queries, analytics
+- `/api/settings/*` - System, AI, maps, push, roles
+- `/api/projects/*` - Install projects, phases, milestones
+- `/api/integrations/*` - QuickBooks, customer equipment
+
+**Legacy routes remaining in server.py:**
+- Auth routes (/api/auth/*) - Login, register, JWT, Google OAuth
+- WebSocket Chat (/api/ws/*) - Real-time job chat
+- Seed Data (/api/seed) - Demo database population
+- Time Tracking - Clock in/out, GPS tracking
+- Board Config - Kanban board configuration
+- J-Load Calculator - HVAC load calculations
+- AI Features - Smart scheduling, summaries
+- Google Maps Routing - Route optimization
+- Maintenance Agreements - Service contracts
+- Customer Portal - Self-service portal
+- Offline Sync - Mobile offline support
+- Import Wizards - Data import tools
 
 ### Mobile-Friendly Web Enhancements - PARTIAL
 - [x] **Scheduling Board** - Added responsive controls, mobile scroll hint, full-width inputs
