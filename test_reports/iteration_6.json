@@ -24,7 +24,7 @@
   },
   "test_credentials": {
     "demo_admin": "Click 'Admin' button on login page",
-    "api_base_url": "https://climate-control-pro-3.preview.emergentagent.com"
+    "api_base_url": "https://hvac-ops-platform.preview.emergentagent.com"
   },
   "seed_data_creation": "None - used existing test data and auto-seeded milestone templates",
   "retest_needed": false,

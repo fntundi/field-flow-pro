@@ -11,7 +11,7 @@ from datetime import datetime
 # Get BASE_URL from environment
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 if not BASE_URL:
-    BASE_URL = "https://climate-control-pro-3.preview.emergentagent.com"
+    BASE_URL = "https://hvac-ops-platform.preview.emergentagent.com"
 
 
 class TestHealthCheck:

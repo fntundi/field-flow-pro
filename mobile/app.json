@@ -29,7 +29,7 @@
       "favicon": "./assets/favicon.png"
     },
     "extra": {
-      "apiUrl": "https://climate-control-pro-3.preview.emergentagent.com/api"
+      "apiUrl": "https://hvac-ops-platform.preview.emergentagent.com/api"
     },
     "scheme": "breezeflow"
   }
