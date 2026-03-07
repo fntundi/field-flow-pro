@@ -9173,9 +9173,12 @@ async def get_quickbooks_sync_logs(user: dict = Depends(require_auth), limit: in
 # Include the router in the main app AFTER all routes are defined
 app.include_router(api_router)
 
-# Include modular routes (prefixed with /api/v2 for testing during migration)
-# Once fully tested, these will replace the original routes
-app.include_router(modular_api_router, prefix="/api/v2")
+# Include modular routes - NOW LIVE at /api prefix
+# Modular routes take precedence for migrated endpoints:
+# - Jobs, Customers, Technicians, Scheduling, Financials, Leads, Inventory
+# - Tasks, Sites, Vendors, VoIP, Reports, Settings, Projects, Integrations
+# Legacy routes in api_router remain for: Auth, WebSocket Chat, Seed Data, Time Tracking, Board Config
+app.include_router(modular_api_router, prefix="/api")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
