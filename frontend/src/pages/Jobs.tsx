@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Search, LayoutGrid, List, RefreshCw, Calendar, Clock, AlertTriangle } from "lucide-react";
 import { jobsApi, Job, seedApi } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { ContactQuickActions } from "@/components/ContactCustomerMenu";
 
 // Job type categories per BreezeFlow requirements
 const jobTypeCategories = {
