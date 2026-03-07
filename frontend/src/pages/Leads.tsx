@@ -536,7 +536,7 @@ export default function Leads() {
                     <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground">Value</th>
                     <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground">Status</th>
                     <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground">Priority</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground">Created</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground">Quick Contact</th>
                     <th className="px-4 py-3"></th>
                   </tr>
                 </thead>
