@@ -27,13 +27,16 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
   Plus,
   Search,
   Phone,
+  PhoneCall,
   Mail,
+  MessageSquare,
   Building2,
   User,
   Calendar,
@@ -43,8 +46,9 @@ import {
   MoreVertical,
   ArrowRight,
 } from "lucide-react";
-import { leadsApi, pcbsApi, Lead, PCB } from "@/lib/api";
+import { leadsApi, pcbsApi, voipApi, Lead, PCB } from "@/lib/api";
 import { toast } from "sonner";
+import { ContactQuickActions } from "@/components/ContactCustomerMenu";
 
 const leadStatusConfig: { [key: string]: { label: string; color: string } } = {
   new: { label: "New", color: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
