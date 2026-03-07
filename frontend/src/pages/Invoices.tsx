@@ -47,10 +47,12 @@ import {
   AlertTriangle,
   Banknote,
   Receipt,
+  Phone,
 } from "lucide-react";
 import { invoicesApi, paymentsApi, stripePaymentsApi, InvoiceRecord, PaymentRecord } from "@/lib/api";
 import { toast } from "sonner";
 import { useSearchParams } from "react-router-dom";
+import { ContactCustomerMenu } from "@/components/ContactCustomerMenu";
 
 const invoiceStatusConfig: { [key: string]: { label: string; color: string; icon: React.ElementType } } = {
   draft: { label: "Draft", color: "bg-slate-500/20 text-slate-400 border-slate-500/30", icon: FileText },
