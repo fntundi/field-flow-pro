@@ -670,6 +670,15 @@ export default function Sites() {
                                   <a href={`mailto:${contact.email}`}><Mail className="w-3 h-3" /></a>
                                 </Button>
                               )}
+                              <ContactCustomerMenu
+                                contact={{
+                                  name: contact.name,
+                                  phone: contact.phone,
+                                  email: contact.email,
+                                  customerId: selectedSite.customer_id,
+                                }}
+                                variant="icon"
+                              />
                             </div>
                           </div>
                         ))}
